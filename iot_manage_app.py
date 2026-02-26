@@ -56,7 +56,7 @@ def homepage():
             <p>Welcome to the central hub for checking your smart home device firmware.</p>
 
             <div class="query-box">
-                <h3>🔍 Query a Device Manually</h3>
+                <h3>Query a Device Manually</h3>
                 <form id="queryForm">
                     <div class="form-group">
                         <label for="device_name">Device Name:</label>

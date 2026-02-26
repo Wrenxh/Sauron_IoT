@@ -26,4 +26,4 @@ jobs:
             git pull --rebase
             pkill -f "python3 iot_manage_app.py" || true
             sleep 2
-            nohup python3 iot_manage_app.py > log.txt 2>&1 & sleep 1
+            nohup python3 iot_manage_app.py > log.txt 2>&1 & disown
