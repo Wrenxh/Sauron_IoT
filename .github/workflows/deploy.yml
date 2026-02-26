@@ -1,0 +1,29 @@
+name: Deploy Sauron IoT to EC2
+
+# 1. This tells GitHub to run this script ONLY when you push to the 'main' branch
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 2. This uses a pre-built tool to securely SSH into your server
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # 3. Here is where it uses the 3 secrets you saved in GitHub!
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          # 4. These are the exact commands it will type into your server
+          script: |
+            cd /home/ec2-user/Sauron_IoT
+            git pull --rebase
+            pkill -f "python3 iot_manage_app.py" || true
+            sleep 2
+            nohup python3 iot_manage_app.py > log.txt 2>&1 &
