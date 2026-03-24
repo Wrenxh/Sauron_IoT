@@ -72,43 +72,92 @@ def device_checkin():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Homepage Route ---
+# --- Homepage Route (UPDATED WITH LIVE DASHBOARD) ---
 @app.route('/')
 def homepage():
+    # Fetch all devices from MongoDB, sorted by newest 'last_seen'
+    all_devices = list(devices_collection.find().sort("last_seen", -1))
+
+    # Helper function to format the timestamp nicely
+    def format_time(dt):
+        return dt.strftime('%Y-%m-%d %H:%M:%S') if dt else "Never"
+
+    # Start building the HTML page (Notice the meta refresh tag!)
     html_page = """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Sauron IoT Device Management</title>
+        <title>Sauron IoT Hub | Live Dashboard</title>
         <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 50px; }
-            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-            h1 { color: #2c3e50; margin-top: 0; }
-            ul { background: #f8f9fa; padding: 15px 15px 15px 35px; border-radius: 5px; }
-            li { margin-bottom: 10px; }
-            a { color: #3498db; text-decoration: none; font-weight: bold; }
-            a:hover { text-decoration: underline; }
-            code { background: #eee; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; }
-
-            .query-box { background: #e8f4f8; padding: 20px; border-radius: 5px; margin-top: 20px; border-left: 5px solid #3498db; }
+            body { font-family: -apple-system, sans-serif; background-color: #f4f4f9; padding: 40px; color: #333; }
+            .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+            h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background-color: #3498db; color: white; }
+            .status-pill { padding: 5px 10px; border-radius: 20px; font-size: 0.8em; font-weight: bold; }
+            .online { background: #e8f5e9; color: #2e7d32; }
+            .offline { background: #ffebee; color: #c62828; }
+            
+            /* Styles for the manual query box at the bottom */
+            .query-box { background: #e8f4f8; padding: 20px; border-radius: 5px; margin-top: 40px; border-left: 5px solid #3498db; }
             .form-group { margin-bottom: 15px; }
             label { display: block; margin-bottom: 5px; font-weight: bold; }
             input[type="text"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
             button { background-color: #3498db; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; font-weight: bold; width: 100%;}
             button:hover { background-color: #2980b9; }
         </style>
+        <meta http-equiv="refresh" content="10"> 
     </head>
     <body>
         <div class="container">
-            <h1>Sauron IoT Device Management</h1>
-            <p>Welcome to the central hub for checking your smart home device firmware.</p>
+            <h1>👁️ Sauron Live Status Board</h1>
+            <p>Monitoring active IoT devices in real-time. Page auto-refreshes every 10 seconds.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Device Name</th>
+                        <th>Status</th>
+                        <th>Battery</th>
+                        <th>Temp</th>
+                        <th>Last Seen (UTC)</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+
+    # Loop through the database records and create a table row for each
+    for dev in all_devices:
+        name = dev.get('device_name', 'Unknown')
+        status = dev.get('status', 'offline')
+        battery = dev.get('battery', 'N/A')
+        temp = dev.get('temperature', 'N/A')
+        last_seen = format_time(dev.get('last_seen'))
+        
+        status_class = "online" if status == "online" else "offline"
+
+        html_page += f"""
+                    <tr>
+                        <td><b>{name}</b></td>
+                        <td><span class="status-pill {status_class}">{status.upper()}</span></td>
+                        <td>{battery}{'%' if battery != 'N/A' else ''}</td>
+                        <td>{temp}{'°F' if temp != 'N/A' else ''}</td>
+                        <td><small>{last_seen}</small></td>
+                    </tr>
+        """
+
+    # Close the table and add back the Manual Query feature
+    html_page += """
+                </tbody>
+            </table>
 
             <div class="query-box">
                 <h3>Query a Device Manually</h3>
                 <form id="queryForm">
                     <div class="form-group">
-                        <label for="device_name">Device Name:</label>
-                        <input type="text" id="device_name" required placeholder="e.g. Google Home or Ring Doorbell">
+                        <label for="device_name_input">Device Name:</label>
+                        <input type="text" id="device_name_input" required placeholder="e.g. Google Home or Ring Doorbell">
                     </div>
                     <div class="form-group">
                         <label for="firmware_version">Current Firmware Version:</label>
@@ -117,20 +166,12 @@ def homepage():
                     <button type="submit">Check Firmware</button>
                 </form>
             </div>
-
-            <br>
-            <h3>Test Links (Click to try!)</h3>
-            <ul>
-                <li><a href="/device/Google_Home?firmware_version=3.77.510748" target="_blank">Google Home (Matches Dataset - Up to date)</a></li>
-                <li><a href="/device/Ring_Doorbell?firmware_version=19.0.0000" target="_blank">Ring Doorbell (Outdated Version - Needs Update)</a></li>
-                <li><a href="/device/Apple_TV?firmware_version=17.0" target="_blank">Apple TV (Not in dataset - 404 Error)</a></li>
-            </ul>
         </div>
 
         <script>
             document.getElementById('queryForm').addEventListener('submit', function(e) {
                 e.preventDefault(); 
-                let deviceName = document.getElementById('device_name').value;
+                let deviceName = document.getElementById('device_name_input').value;
                 let firmwareVersion = document.getElementById('firmware_version').value;
                 deviceName = deviceName.replace(/ /g, '_');
                 let targetUrl = '/device/' + encodeURIComponent(deviceName) + '?firmware_version=' + encodeURIComponent(firmwareVersion);
