@@ -12,7 +12,6 @@ devices_collection = db['devices']
 logs_collection = db['device_logs']
 
 # --- Database Seeder ---
-# Runs once to convert your old list into MongoDB documents
 if devices_collection.count_documents({}) == 0:
     print("Seeding database with initial devices...")
     initial_devices = [
@@ -29,7 +28,6 @@ if devices_collection.count_documents({}) == 0:
 def device_checkin():
     """
     Endpoint for physical IoT devices to report their status.
-    Expects JSON: {"device_name": "...", "battery": 85, "temp": 22}
     """
     data = request.get_json()
     
@@ -38,7 +36,6 @@ def device_checkin():
 
     device_name = data.get("device_name")
     
-    # Create the log entry for history
     checkin_log = {
         "device_name": device_name,
         "battery": data.get("battery"),
@@ -48,11 +45,8 @@ def device_checkin():
     }
 
     try:
-        # 1. Save to history logs
         logs_collection.insert_one(checkin_log)
         
-        # 2. Update the Master Device list with 'Last Seen' and current status
-        # 'upsert=True' adds the device if it's new to the system
         devices_collection.update_one(
             {"device_name": device_name},
             {
@@ -72,17 +66,24 @@ def device_checkin():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Homepage Route (UPDATED WITH LIVE DASHBOARD) ---
+# --- Homepage Route (UPDATED WITH FIRMWARE COLUMN) ---
 @app.route('/')
 def homepage():
-    # Fetch all devices from MongoDB, sorted by newest 'last_seen'
     all_devices = list(devices_collection.find().sort("last_seen", -1))
 
-    # Helper function to format the timestamp nicely
     def format_time(dt):
         return dt.strftime('%Y-%m-%d %H:%M:%S') if dt else "Never"
 
-    # Start building the HTML page (Notice the meta refresh tag!)
+    # --- HARDCODED LATEST FIRMWARE VERSIONS ---
+    # Notice I made the Nest Cam "1.72" so it triggers the outdated warning!
+    LATEST_FIRMWARE = {
+        "Ring Doorbell": "19.4.2400",
+        "Echo 4th gen": "12584493188",
+        "Google Home": "3.77.510748",
+        "Nest Outdoor Cam": "1.72", 
+        "Philips Hue Bulb": "1.86.7"
+    }
+
     html_page = """
     <!DOCTYPE html>
     <html>
@@ -90,7 +91,7 @@ def homepage():
         <title>Sauron IoT Hub | Live Dashboard</title>
         <style>
             body { font-family: -apple-system, sans-serif; background-color: #f4f4f9; padding: 40px; color: #333; }
-            .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+            .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
             h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
@@ -99,7 +100,10 @@ def homepage():
             .online { background: #e8f5e9; color: #2e7d32; }
             .offline { background: #ffebee; color: #c62828; }
             
-            /* Styles for the manual query box at the bottom */
+            .fw-good { color: #27ae60; font-weight: bold; font-size: 0.9em; }
+            .fw-bad { color: #e74c3c; font-weight: bold; font-size: 0.9em; }
+            .fw-unknown { color: #7f8c8d; font-style: italic; font-size: 0.9em; }
+
             .query-box { background: #e8f4f8; padding: 20px; border-radius: 5px; margin-top: 40px; border-left: 5px solid #3498db; }
             .form-group { margin-bottom: 15px; }
             label { display: block; margin-bottom: 5px; font-weight: bold; }
@@ -121,21 +125,32 @@ def homepage():
                         <th>Status</th>
                         <th>Battery</th>
                         <th>Temp</th>
+                        <th>Firmware Status</th>
                         <th>Last Seen (UTC)</th>
                     </tr>
                 </thead>
                 <tbody>
     """
 
-    # Loop through the database records and create a table row for each
     for dev in all_devices:
         name = dev.get('device_name', 'Unknown')
         status = dev.get('status', 'offline')
         battery = dev.get('battery', 'N/A')
         temp = dev.get('temperature', 'N/A')
+        current_version = dev.get('version', 'Unknown')
         last_seen = format_time(dev.get('last_seen'))
         
         status_class = "online" if status == "online" else "offline"
+
+        # --- Firmware Logic Comparison ---
+        target_version = LATEST_FIRMWARE.get(name)
+        
+        if current_version == 'Unknown' or not target_version:
+            fw_display = f"<span class='fw-unknown'>❓ Unknown ({current_version})</span>"
+        elif current_version == target_version:
+            fw_display = f"<span class='fw-good'>✅ Up to Date ({current_version})</span>"
+        else:
+            fw_display = f"<span class='fw-bad'>⚠️ Update Req. ({current_version} &rarr; {target_version})</span>"
 
         html_page += f"""
                     <tr>
@@ -143,11 +158,11 @@ def homepage():
                         <td><span class="status-pill {status_class}">{status.upper()}</span></td>
                         <td>{battery}{'%' if battery != 'N/A' else ''}</td>
                         <td>{temp}{'°F' if temp != 'N/A' else ''}</td>
+                        <td>{fw_display}</td>
                         <td><small>{last_seen}</small></td>
                     </tr>
         """
 
-    # Close the table and add back the Manual Query feature
     html_page += """
                 </tbody>
             </table>
@@ -182,7 +197,6 @@ def homepage():
     </html>
     """
     return html_page
-
 
 # --- Query Route (Handles both Humans and Machines) ---
 @app.route('/device/<device_name>', methods=['GET', 'POST'])
@@ -232,7 +246,6 @@ def query_devices(device_name):
         return render_template_string(result_html, color_class="status-error", icon="❌", title="Error",
                                       device=clean_device_name, message="Missing firmware_version parameter."), 400
 
-    # Query MongoDB for the specific device
     device_doc = devices_collection.find_one({"device_name": clean_device_name})
 
     if device_doc:
