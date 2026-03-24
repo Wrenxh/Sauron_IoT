@@ -9,8 +9,6 @@ client = MongoClient('mongodb+srv://eymohn03_db_user:A8Szpjx4vrMEGoDs@saurontowe
 db = client['SauronTower1']
 devices_collection = db['devices']
 logs_collection = db['device_logs']
-# NEW: A dedicated collection just for tracking the latest firmware versions
-firmware_collection = db['firmware_versions'] 
 
 # --- Database Seeder ---
 if devices_collection.count_documents({}) == 0:
@@ -23,17 +21,6 @@ if devices_collection.count_documents({}) == 0:
         {"device_name": "Philips Hue Bulb", "company": "Philips", "version": "1.86.7"}
     ]
     devices_collection.insert_many(initial_devices)
-
-# NEW: Firmware Database Seeder
-if firmware_collection.count_documents({}) == 0:
-    print("Seeding firmware master list...")
-    firmware_collection.insert_many([
-        {"model": "Ring Doorbell", "latest_version": "19.4.2400"},
-        {"model": "Echo 4th gen", "latest_version": "12584493188"},
-        {"model": "Google Home", "latest_version": "3.77.510748"},
-        {"model": "Nest Outdoor Cam", "latest_version": "1.72"}, # Set to 1.72 to trigger the warning!
-        {"model": "Philips Hue Bulb", "latest_version": "1.86.7"}
-    ])
     print("Database seeded successfully!")
 
 # --- API Routes ---
@@ -58,7 +45,13 @@ def device_checkin():
         logs_collection.insert_one(checkin_log)
         devices_collection.update_one(
             {"device_name": device_name},
-            {"$set": {"last_seen": datetime.utcnow(), "status": "online", "last_ip": request.remote_addr}},
+            {
+                "$set": {
+                    "last_seen": datetime.utcnow(),
+                    "status": "online",
+                    "last_ip": request.remote_addr
+                }
+            },
             upsert=True
         )
         return jsonify({"message": "Sauron acknowledges your presence."}), 200
@@ -84,20 +77,22 @@ def update_firmware():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# --- NEW: Add Device Route ---
 @app.route('/api/device/add', methods=['POST'])
 def add_device():
     data = request.get_json()
     device_name = data.get("device_name", "").strip()
     version = data.get("version", "").strip()
 
+    # Input Validation
     if not device_name:
         return jsonify({"error": "Device name cannot be empty."}), 400
 
+    # Check for duplicates
     if devices_collection.find_one({"device_name": device_name}):
         return jsonify({"error": "A device with this name already exists."}), 409
 
     try:
-        # 1. Add the device to your active monitoring list
         new_device = {
             "device_name": device_name,
             "version": version if version else "Unknown",
@@ -106,19 +101,11 @@ def add_device():
             "temperature": "N/A"
         }
         devices_collection.insert_one(new_device)
-        
-        # 2. NEW LOGIC: Dynamic Firmware Registration
-        # If this is a completely new device type, add it to the master firmware database!
-        if not firmware_collection.find_one({"model": device_name}):
-            firmware_collection.insert_one({
-                "model": device_name, 
-                "latest_version": version if version else "1.0.0"
-            })
-
         return jsonify({"status": "success", "message": f"{device_name} added successfully."}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# --- NEW: Remove Device Route ---
 @app.route('/api/device/remove', methods=['POST'])
 def remove_device():
     data = request.get_json()
@@ -142,12 +129,16 @@ def remove_device():
 def homepage():
     all_devices = list(devices_collection.find().sort("last_seen", -1))
 
-    # NEW: Fetch the master firmware list dynamically from MongoDB instead of hardcoding it
-    firmware_docs = firmware_collection.find()
-    LATEST_FIRMWARE = {doc['model']: doc['latest_version'] for doc in firmware_docs}
-
     def format_time(dt):
         return dt.strftime('%Y-%m-%d %H:%M:%S') if dt else "Never"
+
+    LATEST_FIRMWARE = {
+        "Ring Doorbell": "19.4.2400",
+        "Echo 4th gen": "12584493188",
+        "Google Home": "3.77.510748",
+        "Nest Outdoor Cam": "1.72", 
+        "Philips Hue Bulb": "1.86.7"
+    }
 
     html_page = """
     <!DOCTYPE html>
@@ -225,6 +216,7 @@ def homepage():
             fw_display = f"<span class='fw-bad'>⚠️ Update Req. ({current_version} &rarr; {target_version})</span>"
             ota_button = f"""<button class="action-btn ota-btn" onclick="pushOTAUpdate('{name}', '{target_version}')">🚀 Update</button>"""
 
+        # Add the delete button for every row
         delete_button = f"""<button class="action-btn del-btn" onclick="removeDevice('{name}')">🗑️</button>"""
 
         html_page += f"""
@@ -277,6 +269,7 @@ def homepage():
         </div>
 
         <script>
+            // Handle Manual Query
             document.getElementById('queryForm').addEventListener('submit', function(e) {
                 e.preventDefault(); 
                 let deviceName = document.getElementById('device_name_input').value.replace(/ /g, '_');
@@ -284,6 +277,7 @@ def homepage():
                 window.location.href = targetUrl;
             });
 
+            // Handle Add Device
             document.getElementById('addDeviceForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 let deviceName = document.getElementById('new_device_name').value;
@@ -304,6 +298,7 @@ def homepage():
                 });
             });
 
+            // Handle OTA Update
             function pushOTAUpdate(deviceName, newVersion) {
                 if(confirm("Are you sure you want to deploy firmware v" + newVersion + " to " + deviceName + "?")) {
                     fetch('/api/device/update_firmware', {
@@ -322,6 +317,7 @@ def homepage():
                 }
             }
 
+            // Handle Remove Device
             function removeDevice(deviceName) {
                 if(confirm("CRITICAL WARNING: Are you sure you want to permanently delete " + deviceName + " from the database?")) {
                     fetch('/api/device/remove', {
@@ -345,7 +341,7 @@ def homepage():
     """
     return html_page
 
-# --- Query Route ---
+# --- Query Route (Handles both Humans and Machines) ---
 @app.route('/device/<device_name>', methods=['GET', 'POST'])
 def query_devices(device_name):
     clean_device_name = device_name.replace('_', ' ')
