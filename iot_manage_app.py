@@ -9,6 +9,7 @@ app = Flask(__name__)
 client = MongoClient('mongodb+srv://eymohn03_db_user:A8Szpjx4vrMEGoDs@saurontower1.g7ptgmm.mongodb.net/')
 db = client['SauronTower1']
 devices_collection = db['devices']
+logs_collection = db['device_logs']
 
 # --- Database Seeder ---
 # Runs once to convert your old list into MongoDB documents
