@@ -2,20 +2,25 @@ import requests
 import time
 import random
 
-# Your EC2 Public IP and the new endpoint we just created
-SERVER_URL = "http://13.56.200.180:5005/api/device/checkin"
+# Your EC2 Public IP base URL
+SERVER_URL = "http://13.56.200.180:5005"
+CHECKIN_ENDPOINT = f"{SERVER_URL}/api/device/checkin"
+LIST_ENDPOINT = f"{SERVER_URL}/api/device/list"
 
-# A list of devices to simulate
-DEVICES = [
-    "Ring Doorbell",
-    "Echo 4th gen",
-    "Google Home",
-    "Nest Outdoor Cam",
-    "Philips Hue Bulb"
-]
+def get_active_devices():
+    """Fetches the live list of devices from the Sauron hub."""
+    try:
+        response = requests.get(LIST_ENDPOINT, timeout=5)
+        if response.status_code == 200:
+            return response.json().get("devices", [])
+        else:
+            print(f"⚠️ Failed to fetch devices. Server returned: {response.status_code}")
+    except Exception as e:
+        print(f"⚠️ Could not connect to server to get device list: {e}")
+    return []
 
 def send_checkin(device_name):
-    # Simulate realistic IoT data
+    """Simulates realistic IoT data for a specific device."""
     payload = {
         "device_name": device_name,
         "battery": random.randint(10, 100),
@@ -23,23 +28,32 @@ def send_checkin(device_name):
     }
     
     try:
-        response = requests.post(SERVER_URL, json=payload, timeout=5)
+        response = requests.post(CHECKIN_ENDPOINT, json=payload, timeout=5)
         if response.status_code == 200:
-            print(f"✅ [{device_name}] Check-in successful: {response.json()['message']}")
+            print(f"✅ [{device_name}] Check-in successful: {response.json().get('message', 'OK')}")
         else:
             print(f"❌ [{device_name}] Failed with status: {response.status_code}")
     except Exception as e:
         print(f"⚠️ Connection Error: {e}")
 
 if __name__ == "__main__":
-    print("🚀 Starting Sauron Mock Device Simulator...")
+    print("🚀 Starting DYNAMIC Sauron Mock Device Simulator...")
     try:
         while True:
-            # Pick a random device and send a check-in
-            target = random.choice(DEVICES)
+            # 1. Ask the server for the current list of devices
+            current_devices = get_active_devices()
+            
+            # 2. Check if the database is empty
+            if not current_devices:
+                print("⚠️ No devices found in database. Waiting 5 seconds...")
+                time.sleep(5)
+                continue
+                
+            # 3. Pick a random device from the dynamic list and send a check-in
+            target = random.choice(current_devices)
             send_checkin(target)
             
-            # Wait 5 seconds before the next "ping"
+            # 4. Wait 5 seconds before the next "ping"
             time.sleep(5)
     except KeyboardInterrupt:
         print("\nStopping simulator. Sauron's eye closes.")
