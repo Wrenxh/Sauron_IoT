@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template_string
 from pymongo import MongoClient
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -23,6 +24,52 @@ if devices_collection.count_documents({}) == 0:
     devices_collection.insert_many(initial_devices)
     print("Database seeded successfully!")
 
+@app.route('/api/device/checkin', methods=['POST'])
+def device_checkin():
+    """
+    Endpoint for physical IoT devices to report their status.
+    Expects JSON: {"device_name": "...", "battery": 85, "temp": 22}
+    """
+    data = request.get_json()
+    
+    if not data or 'device_name' not in data:
+        return jsonify({"error": "Missing device_name"}), 400
+
+    device_name = data.get("device_name")
+    
+    # Create the log entry for history
+    checkin_log = {
+        "device_name": device_name,
+        "battery": data.get("battery"),
+        "temperature": data.get("temp"),
+        "ip_address": request.remote_addr,
+        "timestamp": datetime.utcnow()
+    }
+
+    try:
+        # 1. Save to history logs
+        logs_collection.insert_one(checkin_log)
+        
+        # 2. Update the Master Device list with 'Last Seen' and current status
+        # 'upsert=True' adds the device if it's new to the system
+        devices_collection.update_one(
+            {"device_name": device_name},
+            {
+                "$set": {
+                    "last_seen": datetime.utcnow(),
+                    "status": "online",
+                    "last_ip": request.remote_addr
+                }
+            },
+            upsert=True
+        )
+        
+        return jsonify({
+            "message": "Sauron acknowledges your presence.",
+            "server_time": datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # --- Homepage Route ---
 @app.route('/')
