@@ -1,9 +1,10 @@
 import os
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 from pymongo import MongoClient
 from datetime import datetime
 from functools import wraps
 from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- Load Secrets ---
 load_dotenv() 
@@ -12,6 +13,8 @@ MONGO_URI = os.getenv("MONGO_URI")
 API_KEY = os.getenv("SAURON_API_KEY", "fallback_key_if_missing")
 
 app = Flask(__name__)
+# --- Flask Session Security Key ---
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_cookie_secret")
 
 # --- MongoDB Setup ---
 client = MongoClient(MONGO_URI)
@@ -20,8 +23,37 @@ devices_collection = db['devices']
 logs_collection = db['device_logs']
 firmware_collection = db['firmware_versions']
 commands_collection = db['command_queue'] 
+users_collection = db['users'] 
 
-# --- API Authentication Bouncer ---
+# --- Database Seeders ---
+if devices_collection.count_documents({}) == 0:
+    devices_collection.insert_many([
+        {"device_name": "Ring Doorbell", "company": "Amazon", "version": "19.4.2400"},
+        {"device_name": "Echo 4th gen", "company": "Amazon", "version": "12584493188"},
+        {"device_name": "Google Home", "company": "Google", "version": "3.77.510748"},
+        {"device_name": "Nest Outdoor Cam", "company": "Google", "version": "1.71"},
+        {"device_name": "Philips Hue Bulb", "company": "Philips", "version": "1.86.7"}
+    ])
+
+if firmware_collection.count_documents({}) == 0:
+    firmware_collection.insert_many([
+        {"model": "Ring Doorbell", "latest_version": "19.4.2400"},
+        {"model": "Echo 4th gen", "latest_version": "12584493188"},
+        {"model": "Google Home", "latest_version": "3.77.510748"},
+        {"model": "Nest Outdoor Cam", "latest_version": "1.72"}, 
+        {"model": "Philips Hue Bulb", "latest_version": "1.86.7"}
+    ])
+
+if users_collection.count_documents({}) == 0:
+    print("Initializing default admin user...")
+    users_collection.insert_one({
+        "username": "admin",
+        "password": generate_password_hash("Sauron2026!") 
+    })
+
+
+# --- Security Bouncers ---
+
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -31,7 +63,170 @@ def require_api_key(f):
             return jsonify({"error": "Unauthorized. Sauron does not recognize this key."}), 401
     return decorated_function
 
-# --- API Routes ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# --- AUTHENTICATION ROUTES ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'user' in session:
+        return redirect(url_for('homepage'))
+
+    error_msg = ""
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user_record = users_collection.find_one({"username": username})
+        
+        if user_record and check_password_hash(user_record['password'], password):
+            session['user'] = username 
+            return redirect(url_for('homepage'))
+        else:
+            error_msg = '<div class="alert alert-danger" style="background-color: rgba(255, 51, 102, 0.1); border: 1px solid #ff3366; color: #ff3366; padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px;">ACCESS DENIED: Invalid Credentials</div>'
+
+    html_page = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <title>Sauron Hub | Authenticate</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+        <style>
+            body {{ background-color: #090814; color: #f8f9fa; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-image: radial-gradient(circle at center, rgba(157, 78, 221, 0.1), transparent 50%);}}
+            .card {{ background-color: #14122b; border: 1px solid #2b2757; border-radius: 8px; max-width: 400px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }}
+            .form-control {{ background-color: rgba(0,0,0,0.3) !important; border: 1px solid #2b2757 !important; color: white !important; font-family: 'Roboto Mono', monospace; }}
+            .form-control:focus {{ box-shadow: 0 0 0 0.25rem rgba(157, 78, 221, 0.25) !important; border-color: #9d4edd !important; }}
+            .form-label {{ color: #8b87a8; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;}}
+            .btn-cyber {{ background-color: #9d4edd; color: white; border: none; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; border-radius: 4px; padding: 12px; box-shadow: 0 0 20px rgba(157, 78, 221, 0.4); width: 100%; transition: all 0.3s; }}
+            .btn-cyber:hover {{ background-color: #b166eb; color: white; box-shadow: 0 0 30px rgba(157, 78, 221, 0.6); transform: translateY(-1px); }}
+            a.cyber-link {{ color: #8b87a8; text-decoration: none; font-size: 0.8rem; font-weight: 600; letter-spacing: 1px; transition: 0.2s; }}
+            a.cyber-link:hover {{ color: #9d4edd; }}
+        </style>
+    </head>
+    <body>
+        <div class="card p-5">
+            <div class="text-center mb-4">
+                <i class="bi bi-hexagon-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
+                <h3 class="fw-bold mt-3" style="letter-spacing: 2px;">SAURON LOGIN</h3>
+                <p class="text-muted small">AUTHORIZED PERSONNEL ONLY</p>
+            </div>
+            
+            {error_msg}
+
+            <form method="POST" action="/login">
+                <div class="mb-3">
+                    <label class="form-label">OPERATOR ID</label>
+                    <input type="text" name="username" class="form-control" required autocomplete="off">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label">PASSPHRASE</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-cyber mb-4">AUTHENTICATE</button>
+            </form>
+            
+            <div class="text-center border-top border-secondary pt-3 mt-2">
+                <a href="/register" class="cyber-link">PROVISION NEW OPERATOR &rarr;</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_page
+
+# --- NEW: Registration Route ---
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if 'user' in session:
+        return redirect(url_for('homepage'))
+
+    error_msg = ""
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # 1. Check if username already exists to prevent duplicates
+        if users_collection.find_one({"username": username}):
+            error_msg = '<div class="alert alert-warning" style="background-color: rgba(255, 157, 0, 0.1); border: 1px solid #ff9d00; color: #ff9d00; padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px;">OPERATOR ID ALREADY IN USE</div>'
+        else:
+            # 2. Hash the password and save the new user
+            users_collection.insert_one({
+                "username": username,
+                "password": generate_password_hash(password)
+            })
+            # 3. Log them in immediately and send them to the dashboard
+            session['user'] = username 
+            return redirect(url_for('homepage'))
+
+    html_page = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <title>Sauron Hub | Provisioning</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+        <style>
+            body {{ background-color: #090814; color: #f8f9fa; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-image: radial-gradient(circle at center, rgba(157, 78, 221, 0.1), transparent 50%);}}
+            .card {{ background-color: #14122b; border: 1px solid #2b2757; border-radius: 8px; max-width: 400px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }}
+            .form-control {{ background-color: rgba(0,0,0,0.3) !important; border: 1px solid #2b2757 !important; color: white !important; font-family: 'Roboto Mono', monospace; }}
+            .form-control:focus {{ box-shadow: 0 0 0 0.25rem rgba(157, 78, 221, 0.25) !important; border-color: #9d4edd !important; }}
+            .form-label {{ color: #8b87a8; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;}}
+            .btn-cyber {{ background-color: transparent; border: 1px solid #9d4edd; color: #9d4edd; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; border-radius: 4px; padding: 12px; width: 100%; transition: all 0.3s; }}
+            .btn-cyber:hover {{ background-color: #9d4edd; color: white; box-shadow: 0 0 20px rgba(157, 78, 221, 0.4); transform: translateY(-1px); }}
+            a.cyber-link {{ color: #8b87a8; text-decoration: none; font-size: 0.8rem; font-weight: 600; letter-spacing: 1px; transition: 0.2s; }}
+            a.cyber-link:hover {{ color: #9d4edd; }}
+        </style>
+    </head>
+    <body>
+        <div class="card p-5">
+            <div class="text-center mb-4">
+                <i class="bi bi-person-plus-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
+                <h3 class="fw-bold mt-3" style="letter-spacing: 2px;">PROVISION OPERATOR</h3>
+                <p class="text-muted small">CREATE NEW CLEARANCE TIER</p>
+            </div>
+            
+            {error_msg}
+
+            <form method="POST" action="/register">
+                <div class="mb-3">
+                    <label class="form-label">NEW OPERATOR ID</label>
+                    <input type="text" name="username" class="form-control" required autocomplete="off">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label">ASSIGN PASSPHRASE</label>
+                    <input type="password" name="password" class="form-control" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-cyber mb-4">INITIALIZE ACCOUNT</button>
+            </form>
+            
+            <div class="text-center border-top border-secondary pt-3 mt-2">
+                <a href="/login" class="cyber-link">&larr; RETURN TO LOGIN</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_page
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
+
+
+# --- API Routes (Machine-facing, protected by API Key) ---
 
 @app.route('/api/device/checkin', methods=['POST'])
 @require_api_key
@@ -167,29 +362,33 @@ def poll_commands():
         return jsonify({"error": "Server error"}), 500
 
 
-# --- Homepage Route ---
+# --- Dashboard Routes (Human-facing, protected by Session) ---
+
 @app.route('/')
+@login_required  
 def homepage():
     all_devices = list(devices_collection.find().sort("last_seen", -1))
     firmware_docs = firmware_collection.find()
     LATEST_FIRMWARE = {doc['model']: doc['latest_version'] for doc in firmware_docs}
+    
+    operator_name = session.get('user', 'Operator').upper()
 
     def format_time(dt):
         return dt.strftime('%b %d, %H:%M:%S') if dt else "Never"
 
-    html_page = """
+    html_page = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Sauron Hub | CrowdStrike Theme</title>
+        <title>Sauron Hub | Dashboard</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
         <meta http-equiv="refresh" content="10"> 
         <style>
-            :root {
+            :root {{
                 --bg-void: #090814;
                 --surface: #14122b;
                 --surface-hover: #1c193b;
@@ -201,43 +400,37 @@ def homepage():
                 --success-green: #00ff88;
                 --warning-orange: #ff9d00;
                 --danger-red: #ff3366;
-            }
+            }}
 
-            body { background-color: var(--bg-void); color: var(--text-main); font-family: 'Inter', sans-serif; min-height: 100vh; 
-                   background-image: radial-gradient(circle at top right, rgba(157, 78, 221, 0.1), transparent 40%); }
+            body {{ background-color: var(--bg-void); color: var(--text-main); font-family: 'Inter', sans-serif; min-height: 100vh; 
+                   background-image: radial-gradient(circle at top right, rgba(157, 78, 221, 0.1), transparent 40%); }}
             
-            /* Navbar */
-            .navbar { background-color: rgba(20, 18, 43, 0.8) !important; backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); padding: 15px 0; }
-            .navbar-brand { color: #fff !important; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+            .navbar {{ background-color: rgba(20, 18, 43, 0.8) !important; backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); padding: 15px 0; }}
+            .navbar-brand {{ color: #fff !important; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }}
             
-            /* Cards */
-            .card { background-color: var(--surface); border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-radius: 6px; }
-            .card-header { background-color: transparent; border-bottom: 1px solid var(--border-color); padding: 15px 20px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }
+            .card {{ background-color: var(--surface); border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-radius: 6px; }}
+            .card-header {{ background-color: transparent; border-bottom: 1px solid var(--border-color); padding: 15px 20px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }}
             
-            /* Table */
-            .table-container { padding: 0; }
-            .table { color: var(--text-main); margin-bottom: 0; }
-            .table th { background-color: rgba(0,0,0,0.2); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); border-top: none; padding: 15px 20px;}
-            .table td { vertical-align: middle; padding: 15px 20px; border-bottom: 1px solid var(--border-color); }
-            .table-hover tbody tr:hover { background-color: var(--surface-hover); color: #fff; }
-            .device-name { font-weight: 600; color: #fff; letter-spacing: 0.5px; }
+            .table-container {{ padding: 0; }}
+            .table {{ color: var(--text-main); margin-bottom: 0; }}
+            .table th {{ background-color: rgba(0,0,0,0.2); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); border-top: none; padding: 15px 20px;}}
+            .table td {{ vertical-align: middle; padding: 15px 20px; border-bottom: 1px solid var(--border-color); }}
+            .table-hover tbody tr:hover {{ background-color: var(--surface-hover); color: #fff; }}
+            .device-name {{ font-weight: 600; color: #fff; letter-spacing: 0.5px; }}
             
-            /* Badges & Pills */
-            .badge { padding: 6px 10px; font-weight: 700; letter-spacing: 0.5px; font-size: 0.7rem; border-radius: 4px; }
-            .badge-online { background-color: rgba(0, 255, 136, 0.1); color: var(--success-green); border: 1px solid rgba(0, 255, 136, 0.2); }
-            .badge-offline { background-color: rgba(255, 51, 102, 0.1); color: var(--danger-red); border: 1px solid rgba(255, 51, 102, 0.2); }
+            .badge {{ padding: 6px 10px; font-weight: 700; letter-spacing: 0.5px; font-size: 0.7rem; border-radius: 4px; }}
+            .badge-online {{ background-color: rgba(0, 255, 136, 0.1); color: var(--success-green); border: 1px solid rgba(0, 255, 136, 0.2); }}
+            .badge-offline {{ background-color: rgba(255, 51, 102, 0.1); color: var(--danger-red); border: 1px solid rgba(255, 51, 102, 0.2); }}
             
-            /* Buttons */
-            .btn-cyber { background-color: var(--primary-purple); color: white; border: none; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 0.8rem; border-radius: 4px; padding: 10px 20px; box-shadow: var(--glow-purple); transition: all 0.3s ease; }
-            .btn-cyber:hover { background-color: #b166eb; color: white; box-shadow: 0 0 30px rgba(157, 78, 221, 0.6); transform: translateY(-1px); }
-            .btn-cyber-outline { background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; }
-            .btn-cyber-outline:hover { background-color: rgba(255,255,255,0.05); color: white; border-color: var(--text-muted); }
+            .btn-cyber {{ background-color: var(--primary-purple); color: white; border: none; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 0.8rem; border-radius: 4px; padding: 10px 20px; box-shadow: var(--glow-purple); transition: all 0.3s ease; }}
+            .btn-cyber:hover {{ background-color: #b166eb; color: white; box-shadow: 0 0 30px rgba(157, 78, 221, 0.6); transform: translateY(-1px); }}
+            .btn-cyber-outline {{ background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; }}
+            .btn-cyber-outline:hover {{ background-color: rgba(255,255,255,0.05); color: white; border-color: var(--text-muted); }}
             
-            /* Forms */
-            .form-control { background-color: rgba(0,0,0,0.3) !important; border: 1px solid var(--border-color) !important; color: white !important; border-radius: 4px; padding: 12px; font-family: 'Roboto Mono', monospace; font-size: 0.9rem; }
-            .form-control::placeholder { color: #504b72; }
-            .form-control:focus { box-shadow: 0 0 0 0.25rem rgba(157, 78, 221, 0.25) !important; border-color: var(--primary-purple) !important; }
-            .form-label { color: var(--text-muted); font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;}
+            .form-control {{ background-color: rgba(0,0,0,0.3) !important; border: 1px solid var(--border-color) !important; color: white !important; border-radius: 4px; padding: 12px; font-family: 'Roboto Mono', monospace; font-size: 0.9rem; }}
+            .form-control::placeholder {{ color: #504b72; }}
+            .form-control:focus {{ box-shadow: 0 0 0 0.25rem rgba(157, 78, 221, 0.25) !important; border-color: var(--primary-purple) !important; }}
+            .form-label {{ color: var(--text-muted); font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;}}
         </style>
     </head>
     <body>
@@ -247,9 +440,14 @@ def homepage():
                     <i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple); text-shadow: var(--glow-purple);"></i>
                     SAURON PLATFORM
                 </a>
-                <button class="btn btn-cyber" onclick="triggerLanScan()">
-                    <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
-                </button>
+                
+                <div class="d-flex align-items-center">
+                    <span class="text-muted small fw-bold me-4"><i class="bi bi-person-bounding-box me-2"></i>OPERATOR: {operator_name}</span>
+                    <button class="btn btn-cyber me-3" onclick="triggerLanScan()">
+                        <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
+                    </button>
+                    <a href="/logout" class="btn btn-cyber-outline"><i class="bi bi-box-arrow-right me-1"></i> DISCONNECT</a>
+                </div>
             </div>
         </nav>
 
@@ -434,11 +632,13 @@ def homepage():
     """
     return html_page
 
-# --- Query Route ---
 @app.route('/device/<device_name>', methods=['GET', 'POST'])
 def query_devices(device_name):
-    clean_device_name = device_name.replace('_', ' ')
     is_machine = request.method == 'POST' or request.headers.get('Content-Type') == 'application/json'
+    if not is_machine and 'user' not in session:
+        return redirect(url_for('login'))
+
+    clean_device_name = device_name.replace('_', ' ')
     
     if request.method == 'GET':
         firmware_version = request.args.get('firmware_version')
