@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import wraps
 from dotenv import load_dotenv
 
-# --- NEW: Load Secrets ---
+# --- Load Secrets ---
 load_dotenv() 
 
 MONGO_URI = os.getenv("MONGO_URI")
@@ -13,7 +13,7 @@ API_KEY = os.getenv("SAURON_API_KEY", "fallback_key_if_missing")
 
 app = Flask(__name__)
 
-# --- MongoDB Setup (Now Secure!) ---
+# --- MongoDB Setup ---
 client = MongoClient(MONGO_URI)
 db = client['SauronTower1']
 devices_collection = db['devices']
@@ -21,18 +21,17 @@ logs_collection = db['device_logs']
 firmware_collection = db['firmware_versions']
 commands_collection = db['command_queue'] 
 
-# --- NEW: API Authentication Bouncer ---
+# --- API Authentication Bouncer ---
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Check if the incoming request has the secret key in its headers
         if request.headers.get("X-Api-Key") == API_KEY:
             return f(*args, **kwargs)
         else:
             return jsonify({"error": "Unauthorized. Sauron does not recognize this key."}), 401
     return decorated_function
 
-# --- API Routes (Now protected by the bouncer) ---
+# --- API Routes ---
 
 @app.route('/api/device/checkin', methods=['POST'])
 @require_api_key
@@ -176,67 +175,62 @@ def homepage():
     LATEST_FIRMWARE = {doc['model']: doc['latest_version'] for doc in firmware_docs}
 
     def format_time(dt):
-        return dt.strftime('%Y-%m-%d %H:%M:%S') if dt else "Never"
+        return dt.strftime('%b %d, %H:%M:%S') if dt else "Never"
 
     html_page = """
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-        <title>Sauron IoT Hub | Live Dashboard</title>
-        <style>
-            body { font-family: -apple-system, sans-serif; background-color: #f4f4f9; padding: 40px; color: #333; }
-            .container { max-width: 1050px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-            .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 20px;}
-            h1 { color: #2c3e50; margin: 0; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: middle; }
-            th { background-color: #3498db; color: white; }
-            .status-pill { padding: 5px 10px; border-radius: 20px; font-size: 0.8em; font-weight: bold; }
-            .online { background: #e8f5e9; color: #2e7d32; }
-            .offline { background: #ffebee; color: #c62828; }
-            .fw-good { color: #27ae60; font-weight: bold; font-size: 0.9em; }
-            .fw-bad { color: #e74c3c; font-weight: bold; font-size: 0.9em; }
-            .fw-unknown { color: #7f8c8d; font-style: italic; font-size: 0.9em; }
-            .action-btn { color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; margin-top: 5px; display: inline-block; transition: 0.2s; }
-            .ota-btn { background-color: #f39c12; }
-            .ota-btn:hover { background-color: #e67e22; transform: scale(1.05); }
-            .del-btn { background-color: #e74c3c; margin-left: 5px; }
-            .del-btn:hover { background-color: #c0392b; transform: scale(1.05); }
-            .scan-btn { background-color: #8e44ad; font-size: 1em; padding: 10px 15px;}
-            .scan-btn:hover { background-color: #732d91; transform: scale(1.02);}
-            .panel-container { display: flex; gap: 20px; margin-top: 40px; }
-            .box { flex: 1; background: #e8f4f8; padding: 20px; border-radius: 5px; border-left: 5px solid #3498db; }
-            .form-group { margin-bottom: 15px; }
-            label { display: block; margin-bottom: 5px; font-weight: bold; }
-            input[type="text"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
-            button.submit-btn { background-color: #3498db; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; font-weight: bold; width: 100%;}
-            button.submit-btn:hover { background-color: #2980b9; }
-        </style>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sauron Hub | Dashboard</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
         <meta http-equiv="refresh" content="10"> 
+        <style>
+            body { background-color: #f4f6f9; color: #333; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+            .navbar { background-color: #2c3e50; }
+            .navbar-brand { color: #ecf0f1 !important; font-weight: 600; letter-spacing: 1px; }
+            .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 24px; }
+            .card-header { background-color: white; border-bottom: 1px solid #edf2f7; padding: 15px 20px; border-radius: 10px 10px 0 0 !important; font-weight: 600; color: #2c3e50; }
+            .table-container { padding: 0; }
+            .table th { background-color: #f8fafc; color: #64748b; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }
+            .table td { vertical-align: middle; padding: 12px 20px; }
+            .device-name { font-weight: 600; color: #1e293b; }
+            .badge { padding: 6px 10px; font-weight: 600; letter-spacing: 0.3px; }
+            .btn-action { transition: all 0.2s; }
+            .btn-action:hover { transform: translateY(-2px); }
+        </style>
     </head>
     <body>
-        <div class="container">
-            <div class="header-container">
-                <div>
-                    <h1>👁️ Sauron Live Status Board</h1>
-                    <p style="margin-top: 5px; margin-bottom: 0;">Monitoring active IoT devices in real-time.</p>
-                </div>
-                <button class="action-btn scan-btn" onclick="triggerLanScan()">📡 Trigger Remote LAN Scan</button>
+        <nav class="navbar navbar-expand-lg mb-4">
+            <div class="container-fluid px-4">
+                <a class="navbar-brand" href="#"><i class="bi bi-eye-fill me-2 text-info"></i>Sauron Command Center</a>
+                <button class="btn btn-info btn-sm text-white fw-bold btn-action" onclick="triggerLanScan()">
+                    <i class="bi bi-radar me-1"></i> Run LAN Scan
+                </button>
             </div>
+        </nav>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Device Name</th>
-                        <th>Status</th>
-                        <th>Battery</th>
-                        <th>Temp</th>
-                        <th>Firmware Status</th>
-                        <th>Last Seen (UTC)</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
+        <div class="container-fluid px-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-hdd-network me-2"></i>Active IoT Devices</span>
+                    <span class="badge bg-secondary text-light fw-normal"><i class="bi bi-arrow-repeat me-1"></i>Auto-refreshing</span>
+                </div>
+                <div class="card-body table-container table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Device Target</th>
+                                <th>Status</th>
+                                <th>Telemetry</th>
+                                <th>Firmware Integrity</th>
+                                <th>Last Ping (UTC)</th>
+                                <th class="text-end pe-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
     """
 
     for dev in all_devices:
@@ -247,80 +241,102 @@ def homepage():
         current_version = dev.get('version', 'Unknown')
         last_seen = format_time(dev.get('last_seen'))
         
-        status_class = "online" if status == "online" else "offline"
+        # Status styling
+        if status == "online":
+            status_badge = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill"><i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>ONLINE</span>'
+        else:
+            status_badge = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill"><i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>OFFLINE</span>'
+
         target_version = LATEST_FIRMWARE.get(name)
         
+        # Firmware styling
         ota_button = ""
         if current_version == 'Unknown' or not target_version:
-            fw_display = f"<span class='fw-unknown'>❓ Unknown ({current_version})</span>"
+            fw_display = f'<span class="text-secondary fst-italic small"><i class="bi bi-question-circle me-1"></i>Unknown ({current_version})</span>'
         elif current_version == target_version:
-            fw_display = f"<span class='fw-good'>✅ Up to Date ({current_version})</span>"
+            fw_display = f'<span class="text-success fw-bold small"><i class="bi bi-shield-check me-1"></i>Up to date ({current_version})</span>'
         else:
-            fw_display = f"<span class='fw-bad'>⚠️ Update Req. ({current_version} &rarr; {target_version})</span>"
-            ota_button = f"""<button class="action-btn ota-btn" onclick="pushOTAUpdate('{name}', '{target_version}')">🚀 Update</button>"""
+            fw_display = f'<span class="text-danger fw-bold small"><i class="bi bi-shield-exclamation me-1"></i>Outdated ({current_version} &rarr; {target_version})</span>'
+            ota_button = f'<button class="btn btn-warning btn-sm btn-action me-1" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Deploy Update"><i class="bi bi-cloud-arrow-up"></i></button>'
 
-        delete_button = f"""<button class="action-btn del-btn" onclick="removeDevice('{name}')">🗑️</button>"""
+        delete_button = f'<button class="btn btn-outline-danger btn-sm btn-action" onclick="removeDevice(\'{name}\')" title="Remove Device"><i class="bi bi-trash3"></i></button>'
+
+        # Telemetry combining
+        telemetry = f'<span class="me-2" title="Battery"><i class="bi bi-battery-half text-secondary me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
+        telemetry += f'<span title="Temperature"><i class="bi bi-thermometer-half text-secondary me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
 
         html_page += f"""
-                    <tr>
-                        <td><b>{name}</b></td>
-                        <td><span class="status-pill {status_class}">{status.upper()}</span></td>
-                        <td>{battery}{'%' if battery != 'N/A' else ''}</td>
-                        <td>{temp}{'°F' if temp != 'N/A' else ''}</td>
-                        <td>{fw_display}</td>
-                        <td><small>{last_seen}</small></td>
-                        <td>{ota_button} {delete_button}</td>
-                    </tr>
+                            <tr>
+                                <td class="ps-4 device-name">{name}</td>
+                                <td>{status_badge}</td>
+                                <td>{telemetry}</td>
+                                <td>{fw_display}</td>
+                                <td class="text-muted small">{last_seen}</td>
+                                <td class="text-end pe-4">
+                                    {ota_button}
+                                    {delete_button}
+                                </td>
+                            </tr>
         """
 
-    # We dynamically pass the API key into the JavaScript so the frontend can securely talk to the backend
     html_page += f"""
-                </tbody>
-            </table>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-            <div class="panel-container">
-                <div class="box">
-                    <h3>➕ Register New Device</h3>
-                    <form id="addDeviceForm">
-                        <div class="form-group">
-                            <label for="new_device_name">Device Name:</label>
-                            <input type="text" id="new_device_name" required placeholder="e.g. Smart Lock">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Provision New Device</div>
+                        <div class="card-body">
+                            <form id="addDeviceForm">
+                                <div class="mb-3">
+                                    <label for="new_device_name" class="form-label text-muted small fw-bold">DEVICE ALIAS</label>
+                                    <input type="text" class="form-control bg-light" id="new_device_name" required placeholder="e.g. Smart Garage Door">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="new_device_version" class="form-label text-muted small fw-bold">FACTORY FIRMWARE VERSION</label>
+                                    <input type="text" class="form-control bg-light" id="new_device_version" placeholder="e.g. 1.0.0">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 fw-bold">Initialize Device</button>
+                            </form>
                         </div>
-                        <div class="form-group">
-                            <label for="new_device_version">Initial Firmware Version:</label>
-                            <input type="text" id="new_device_version" placeholder="e.g. 1.0.0">
-                        </div>
-                        <button type="submit" class="submit-btn">Add Device</button>
-                    </form>
+                    </div>
                 </div>
 
-                <div class="box">
-                    <h3>🔍 Query a Device Manually</h3>
-                    <form id="queryForm">
-                        <div class="form-group">
-                            <label for="device_name_input">Device Name:</label>
-                            <input type="text" id="device_name_input" required placeholder="e.g. Google Home">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header"><i class="bi bi-search me-2"></i>Manual Firmware Audit</div>
+                        <div class="card-body">
+                            <form id="queryForm">
+                                <div class="mb-3">
+                                    <label for="device_name_input" class="form-label text-muted small fw-bold">TARGET DEVICE</label>
+                                    <input type="text" class="form-control bg-light" id="device_name_input" required placeholder="e.g. Google Home">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="firmware_version" class="form-label text-muted small fw-bold">REPORTED VERSION</label>
+                                    <input type="text" class="form-control bg-light" id="firmware_version" required placeholder="e.g. 1.71">
+                                </div>
+                                <button type="submit" class="btn btn-secondary w-100 fw-bold text-white">Execute Audit</button>
+                            </form>
                         </div>
-                        <div class="form-group">
-                            <label for="firmware_version">Current Firmware Version:</label>
-                            <input type="text" id="firmware_version" required placeholder="e.g. 1.71">
-                        </div>
-                        <button type="submit" class="submit-btn">Check Firmware</button>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+        
         <script>
-            // The frontend now uses the secret key loaded from the .env file!
             const API_HEADERS = {{ 
                 'Content-Type': 'application/json',
                 'X-Api-Key': '{API_KEY}' 
             }};
 
             function triggerLanScan() {{
-                alert("Scan command queued!");
-                fetch('/api/probe/trigger_scan', {{ method: 'POST', headers: API_HEADERS }});
+                fetch('/api/probe/trigger_scan', {{ method: 'POST', headers: API_HEADERS }})
+                .then(() => alert("Sauron Probe activated. LAN Scan command queued."));
             }}
 
             document.getElementById('queryForm').addEventListener('submit', function(e) {{
@@ -343,12 +359,12 @@ def homepage():
                 .then(response => response.json())
                 .then(data => {{
                     if(data.status === 'success') window.location.reload(); 
-                    else alert("Error: " + data.error);
+                    else alert("Audit Failure: " + data.error);
                 }});
             }});
 
             function pushOTAUpdate(deviceName, newVersion) {{
-                if(confirm("Are you sure you want to deploy firmware v" + newVersion + " to " + deviceName + "?")) {{
+                if(confirm("AUTHORIZATION REQUIRED: Deploy firmware v" + newVersion + " to " + deviceName + "?")) {{
                     fetch('/api/device/update_firmware', {{
                         method: 'POST',
                         headers: API_HEADERS,
@@ -357,13 +373,13 @@ def homepage():
                     .then(response => response.json())
                     .then(data => {{
                         if(data.status === 'success') window.location.reload(); 
-                        else alert("Deployment failed: " + data.error);
+                        else alert("Deployment Error: " + data.error);
                     }});
                 }}
             }}
 
             function removeDevice(deviceName) {{
-                if(confirm("CRITICAL WARNING: Are you sure you want to permanently delete " + deviceName + " from the database?")) {{
+                if(confirm("CRITICAL WARNING: Irreversibly purge " + deviceName + " from the mainframe?")) {{
                     fetch('/api/device/remove', {{
                         method: 'POST',
                         headers: API_HEADERS,
@@ -372,7 +388,7 @@ def homepage():
                     .then(response => response.json())
                     .then(data => {{
                         if(data.status === 'success') window.location.reload(); 
-                        else alert("Failed to delete: " + data.error);
+                        else alert("Purge Failed: " + data.error);
                     }});
                 }}
             }}
@@ -380,7 +396,6 @@ def homepage():
     </body>
     </html>
     """
-    # Notice we removed render_template_string and are just passing the f-string HTML!
     return html_page
 
 # --- Query Route ---
@@ -395,18 +410,34 @@ def query_devices(device_name):
         request_data = request.get_json()
         firmware_version = request_data.get('firmware_version') if request_data else None
 
+    # Revamped the Result Page with Bootstrap too!
     result_html = """
     <!DOCTYPE html>
-    <html>
-    <head><title>Firmware Result</title><style>body { font-family: sans-serif; background: #f4f4f9; padding: 50px; display: flex; justify-content: center; } .card { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 500px; width: 100%; } .status-success { color: #27ae60; } .status-warning { color: #f39c12; } .status-error { color: #e74c3c; } .device-name { font-size: 1.2em; font-weight: bold; margin: 20px 0; padding: 10px; background: #eee; border-radius: 5px; } .back-btn { background-color: #3498db; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }</style></head>
-    <body><div class="card"><h1 class="{{ color_class }}">{{ icon }} {{ title }}</h1><div class="device-name">{{ device }}</div><div class="message">{{ message | safe }}</div><br><br><a href="/" class="back-btn">← Check Another Device</a></div></body>
+    <html lang="en">
+    <head>
+        <title>Audit Result</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+        <style>body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }</style>
+    </head>
+    <body>
+        <div class="card shadow-sm border-0" style="max-width: 500px; width: 100%;">
+            <div class="card-body text-center p-5">
+                <div class="mb-4">{{ icon }}</div>
+                <h2 class="fw-bold {{ text_class }} mb-3">{{ title }}</h2>
+                <div class="bg-light p-3 rounded mb-4 fw-bold text-secondary">{{ device }}</div>
+                <p class="text-muted mb-4 fs-5">{{ message | safe }}</p>
+                <a href="/" class="btn btn-outline-secondary w-100 fw-bold"><i class="bi bi-arrow-left me-2"></i>Return to Hub</a>
+            </div>
+        </div>
+    </body>
     </html>
     """
 
     if not firmware_version:
         if is_machine: 
             return jsonify({"error": "Missing firmware_version parameter"}), 400
-        return render_template_string(result_html, color_class="status-error", icon="❌", title="Error", device=clean_device_name, message="Missing firmware_version parameter."), 400
+        return render_template_string(result_html, text_class="text-danger", icon='<i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>', title="System Error", device=clean_device_name, message="Missing firmware_version parameter."), 400
 
     device_doc = devices_collection.find_one({"device_name": clean_device_name})
 
@@ -415,14 +446,15 @@ def query_devices(device_name):
         if current_version == firmware_version:
             if is_machine: 
                 return jsonify({"status": "up_to_date", "current_version": current_version}), 200
-            return render_template_string(result_html, color_class="status-success", icon="✅", title="Up to Date!", device=clean_device_name, message=f"Device is running the latest firmware ({current_version})."), 200
+            return render_template_string(result_html, text_class="text-success", icon='<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>', title="Integrity Verified", device=clean_device_name, message=f"Device is running the latest authorized firmware ({current_version})."), 200
         else:
             if is_machine: 
                 return jsonify({"status": "update_required", "latest_version": current_version}), 200
-            return render_template_string(result_html, color_class="status-warning", icon="⚠️", title="Update Required", device=clean_device_name, message=f"Your version is {firmware_version}, latest is <b>{current_version}</b>."), 200
+            return render_template_string(result_html, text_class="text-warning", icon='<i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 4rem;"></i>', title="Vulnerability Detected", device=clean_device_name, message=f"Reported version is {firmware_version}, but the secure baseline is <b>{current_version}</b>."), 200
 
     if is_machine: 
         return jsonify({"error": "Device not found."}), 404
-    return render_template_string(result_html, color_class="status-error", icon="❓", title="Not Found", device=clean_device_name, message="Device not found in database."), 404
+    return render_template_string(result_html, text_class="text-danger", icon='<i class="bi bi-question-circle-fill text-danger" style="font-size: 4rem;"></i>', title="Target Not Found", device=clean_device_name, message="Device not found in the Sauron database."), 404
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)
