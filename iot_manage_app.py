@@ -163,8 +163,8 @@ def poll_commands():
             return jsonify({"command": "scan_lan"}), 200
         else:
             return jsonify({"command": "sleep"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return jsonify({"error": "Server error"}), 500
 
 
 # --- Homepage Route ---
@@ -183,50 +183,91 @@ def homepage():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Sauron Hub | Dashboard</title>
+        <title>Sauron Hub | CrowdStrike Theme</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
         <meta http-equiv="refresh" content="10"> 
         <style>
-            body { background-color: #f4f6f9; color: #333; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
-            .navbar { background-color: #2c3e50; }
-            .navbar-brand { color: #ecf0f1 !important; font-weight: 600; letter-spacing: 1px; }
-            .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 24px; }
-            .card-header { background-color: white; border-bottom: 1px solid #edf2f7; padding: 15px 20px; border-radius: 10px 10px 0 0 !important; font-weight: 600; color: #2c3e50; }
+            :root {
+                --bg-void: #090814;
+                --surface: #14122b;
+                --surface-hover: #1c193b;
+                --border-color: #2b2757;
+                --primary-purple: #9d4edd;
+                --glow-purple: 0 0 20px rgba(157, 78, 221, 0.4);
+                --text-main: #f8f9fa;
+                --text-muted: #8b87a8;
+                --success-green: #00ff88;
+                --warning-orange: #ff9d00;
+                --danger-red: #ff3366;
+            }
+
+            body { background-color: var(--bg-void); color: var(--text-main); font-family: 'Inter', sans-serif; min-height: 100vh; 
+                   background-image: radial-gradient(circle at top right, rgba(157, 78, 221, 0.1), transparent 40%); }
+            
+            /* Navbar */
+            .navbar { background-color: rgba(20, 18, 43, 0.8) !important; backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); padding: 15px 0; }
+            .navbar-brand { color: #fff !important; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+            
+            /* Cards */
+            .card { background-color: var(--surface); border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-radius: 6px; }
+            .card-header { background-color: transparent; border-bottom: 1px solid var(--border-color); padding: 15px 20px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }
+            
+            /* Table */
             .table-container { padding: 0; }
-            .table th { background-color: #f8fafc; color: #64748b; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }
-            .table td { vertical-align: middle; padding: 12px 20px; }
-            .device-name { font-weight: 600; color: #1e293b; }
-            .badge { padding: 6px 10px; font-weight: 600; letter-spacing: 0.3px; }
-            .btn-action { transition: all 0.2s; }
-            .btn-action:hover { transform: translateY(-2px); }
+            .table { color: var(--text-main); margin-bottom: 0; }
+            .table th { background-color: rgba(0,0,0,0.2); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); border-top: none; padding: 15px 20px;}
+            .table td { vertical-align: middle; padding: 15px 20px; border-bottom: 1px solid var(--border-color); }
+            .table-hover tbody tr:hover { background-color: var(--surface-hover); color: #fff; }
+            .device-name { font-weight: 600; color: #fff; letter-spacing: 0.5px; }
+            
+            /* Badges & Pills */
+            .badge { padding: 6px 10px; font-weight: 700; letter-spacing: 0.5px; font-size: 0.7rem; border-radius: 4px; }
+            .badge-online { background-color: rgba(0, 255, 136, 0.1); color: var(--success-green); border: 1px solid rgba(0, 255, 136, 0.2); }
+            .badge-offline { background-color: rgba(255, 51, 102, 0.1); color: var(--danger-red); border: 1px solid rgba(255, 51, 102, 0.2); }
+            
+            /* Buttons */
+            .btn-cyber { background-color: var(--primary-purple); color: white; border: none; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 0.8rem; border-radius: 4px; padding: 10px 20px; box-shadow: var(--glow-purple); transition: all 0.3s ease; }
+            .btn-cyber:hover { background-color: #b166eb; color: white; box-shadow: 0 0 30px rgba(157, 78, 221, 0.6); transform: translateY(-1px); }
+            .btn-cyber-outline { background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; }
+            .btn-cyber-outline:hover { background-color: rgba(255,255,255,0.05); color: white; border-color: var(--text-muted); }
+            
+            /* Forms */
+            .form-control { background-color: rgba(0,0,0,0.3) !important; border: 1px solid var(--border-color) !important; color: white !important; border-radius: 4px; padding: 12px; font-family: 'Roboto Mono', monospace; font-size: 0.9rem; }
+            .form-control::placeholder { color: #504b72; }
+            .form-control:focus { box-shadow: 0 0 0 0.25rem rgba(157, 78, 221, 0.25) !important; border-color: var(--primary-purple) !important; }
+            .form-label { color: var(--text-muted); font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;}
         </style>
     </head>
     <body>
-        <nav class="navbar navbar-expand-lg mb-4">
-            <div class="container-fluid px-4">
-                <a class="navbar-brand" href="#"><i class="bi bi-eye-fill me-2 text-info"></i>Sauron Command Center</a>
-                <button class="btn btn-info btn-sm text-white fw-bold btn-action" onclick="triggerLanScan()">
-                    <i class="bi bi-radar me-1"></i> Run LAN Scan
+        <nav class="navbar navbar-expand-lg mb-5">
+            <div class="container-fluid px-5">
+                <a class="navbar-brand d-flex align-items-center" href="#">
+                    <i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple); font-size: 1.5rem; text-shadow: var(--glow-purple);"></i>
+                    SAURON PLATFORM
+                </a>
+                <button class="btn btn-cyber" onclick="triggerLanScan()">
+                    <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
                 </button>
             </div>
         </nav>
 
-        <div class="container-fluid px-4">
-            <div class="card">
+        <div class="container-fluid px-5">
+            <div class="card mb-5">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-hdd-network me-2"></i>Active IoT Devices</span>
-                    <span class="badge bg-secondary text-light fw-normal"><i class="bi bi-arrow-repeat me-1"></i>Auto-refreshing</span>
+                    <span><i class="bi bi-hdd-stack text-muted me-2"></i>Endpoint Telemetry</span>
+                    <span class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-broadcast me-1" style="color: var(--primary-purple);"></i> LIVE LINK ACTIVE</span>
                 </div>
                 <div class="card-body table-container table-responsive">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th class="ps-4">Device Target</th>
-                                <th>Status</th>
-                                <th>Telemetry</th>
-                                <th>Firmware Integrity</th>
-                                <th>Last Ping (UTC)</th>
+                                <th class="ps-4">Endpoint Alias</th>
+                                <th>Network State</th>
+                                <th>Vitals (PWR / TMP)</th>
+                                <th>Firmware Policy</th>
+                                <th>Last Check-In (UTC)</th>
                                 <th class="text-end pe-4">Actions</th>
                             </tr>
                         </thead>
@@ -243,27 +284,27 @@ def homepage():
         
         # Status styling
         if status == "online":
-            status_badge = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill"><i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>ONLINE</span>'
+            status_badge = '<span class="badge badge-online"><i class="bi bi-circle-fill me-1" style="font-size: 6px; vertical-align: middle;"></i> ONLINE</span>'
         else:
-            status_badge = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill"><i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>OFFLINE</span>'
+            status_badge = '<span class="badge badge-offline"><i class="bi bi-circle-fill me-1" style="font-size: 6px; vertical-align: middle;"></i> OFFLINE</span>'
 
         target_version = LATEST_FIRMWARE.get(name)
         
         # Firmware styling
         ota_button = ""
         if current_version == 'Unknown' or not target_version:
-            fw_display = f'<span class="text-secondary fst-italic small"><i class="bi bi-question-circle me-1"></i>Unknown ({current_version})</span>'
+            fw_display = f'<span class="text-muted fw-bold" style="font-size: 0.85rem;"><i class="bi bi-dash-circle me-1"></i> UNKNOWN ({current_version})</span>'
         elif current_version == target_version:
-            fw_display = f'<span class="text-success fw-bold small"><i class="bi bi-shield-check me-1"></i>Up to date ({current_version})</span>'
+            fw_display = f'<span style="color: var(--success-green); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-check me-1"></i> COMPLIANT</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">v{current_version}</span>'
         else:
-            fw_display = f'<span class="text-danger fw-bold small"><i class="bi bi-shield-exclamation me-1"></i>Outdated ({current_version} &rarr; {target_version})</span>'
-            ota_button = f'<button class="btn btn-warning btn-sm btn-action me-1" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Deploy Update"><i class="bi bi-cloud-arrow-up"></i></button>'
+            fw_display = f'<span style="color: var(--danger-red); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-exclamation me-1"></i> VULNERABLE</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">({current_version} &rarr; {target_version})</span>'
+            ota_button = f'<button class="btn btn-sm btn-cyber me-2" style="padding: 5px 10px; font-size: 0.7rem;" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Push Update">PATCH OTA</button>'
 
-        delete_button = f'<button class="btn btn-outline-danger btn-sm btn-action" onclick="removeDevice(\'{name}\')" title="Remove Device"><i class="bi bi-trash3"></i></button>'
+        delete_button = f'<button class="btn btn-sm btn-cyber-outline" style="padding: 5px 10px;" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3"></i></button>'
 
         # Telemetry combining
-        telemetry = f'<span class="me-2" title="Battery"><i class="bi bi-battery-half text-secondary me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
-        telemetry += f'<span title="Temperature"><i class="bi bi-thermometer-half text-secondary me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
+        telemetry = f'<span class="me-3" style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-lightning-charge-fill text-muted me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
+        telemetry += f'<span style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-thermometer-half text-muted me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
 
         html_page += f"""
                             <tr>
@@ -271,7 +312,7 @@ def homepage():
                                 <td>{status_badge}</td>
                                 <td>{telemetry}</td>
                                 <td>{fw_display}</td>
-                                <td class="text-muted small">{last_seen}</td>
+                                <td style="font-family: 'Roboto Mono', monospace; font-size: 0.85rem; color: var(--text-muted);">{last_seen}</td>
                                 <td class="text-end pe-4">
                                     {ota_button}
                                     {delete_button}
@@ -285,21 +326,21 @@ def homepage():
                 </div>
             </div>
 
-            <div class="row g-4">
+            <div class="row g-4 mb-5">
                 <div class="col-md-6">
                     <div class="card h-100">
-                        <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Provision New Device</div>
-                        <div class="card-body">
+                        <div class="card-header"><i class="bi bi-terminal me-2"></i>Provision Endpoint</div>
+                        <div class="card-body p-4">
                             <form id="addDeviceForm">
-                                <div class="mb-3">
-                                    <label for="new_device_name" class="form-label text-muted small fw-bold">DEVICE ALIAS</label>
-                                    <input type="text" class="form-control bg-light" id="new_device_name" required placeholder="e.g. Smart Garage Door">
-                                </div>
                                 <div class="mb-4">
-                                    <label for="new_device_version" class="form-label text-muted small fw-bold">FACTORY FIRMWARE VERSION</label>
-                                    <input type="text" class="form-control bg-light" id="new_device_version" placeholder="e.g. 1.0.0">
+                                    <label for="new_device_name" class="form-label">ENDPOINT ALIAS</label>
+                                    <input type="text" class="form-control" id="new_device_name" required placeholder="e.g. SRV-GARAGE-01">
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100 fw-bold">Initialize Device</button>
+                                <div class="mb-5">
+                                    <label for="new_device_version" class="form-label">BASELINE FIRMWARE</label>
+                                    <input type="text" class="form-control" id="new_device_version" placeholder="1.0.0">
+                                </div>
+                                <button type="submit" class="btn btn-cyber-outline w-100 py-2">REGISTER TO HUB</button>
                             </form>
                         </div>
                     </div>
@@ -307,26 +348,24 @@ def homepage():
 
                 <div class="col-md-6">
                     <div class="card h-100">
-                        <div class="card-header"><i class="bi bi-search me-2"></i>Manual Firmware Audit</div>
-                        <div class="card-body">
+                        <div class="card-header"><i class="bi bi-search me-2"></i>Manual Integrity Audit</div>
+                        <div class="card-body p-4">
                             <form id="queryForm">
-                                <div class="mb-3">
-                                    <label for="device_name_input" class="form-label text-muted small fw-bold">TARGET DEVICE</label>
-                                    <input type="text" class="form-control bg-light" id="device_name_input" required placeholder="e.g. Google Home">
-                                </div>
                                 <div class="mb-4">
-                                    <label for="firmware_version" class="form-label text-muted small fw-bold">REPORTED VERSION</label>
-                                    <input type="text" class="form-control bg-light" id="firmware_version" required placeholder="e.g. 1.71">
+                                    <label for="device_name_input" class="form-label">TARGET IDENTIFIER</label>
+                                    <input type="text" class="form-control" id="device_name_input" required placeholder="e.g. Google Home">
                                 </div>
-                                <button type="submit" class="btn btn-secondary w-100 fw-bold text-white">Execute Audit</button>
+                                <div class="mb-5">
+                                    <label for="firmware_version" class="form-label">REPORTED VERSION</label>
+                                    <input type="text" class="form-control" id="firmware_version" required placeholder="e.g. 1.71">
+                                </div>
+                                <button type="submit" class="btn btn-cyber-outline w-100 py-2">EXECUTE AUDIT</button>
                             </form>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
         
         <script>
             const API_HEADERS = {{ 
@@ -336,7 +375,7 @@ def homepage():
 
             function triggerLanScan() {{
                 fetch('/api/probe/trigger_scan', {{ method: 'POST', headers: API_HEADERS }})
-                .then(() => alert("Sauron Probe activated. LAN Scan command queued."));
+                .then(() => alert("[COMMAND SENT] Sauron Probe activated. Awaiting remote telemetry..."));
             }}
 
             document.getElementById('queryForm').addEventListener('submit', function(e) {{
@@ -359,12 +398,12 @@ def homepage():
                 .then(response => response.json())
                 .then(data => {{
                     if(data.status === 'success') window.location.reload(); 
-                    else alert("Audit Failure: " + data.error);
+                    else alert("Provisioning Error: " + data.error);
                 }});
             }});
 
             function pushOTAUpdate(deviceName, newVersion) {{
-                if(confirm("AUTHORIZATION REQUIRED: Deploy firmware v" + newVersion + " to " + deviceName + "?")) {{
+                if(confirm("CRITICAL ACTION: Deploy emergency patch v" + newVersion + " to " + deviceName + "?")) {{
                     fetch('/api/device/update_firmware', {{
                         method: 'POST',
                         headers: API_HEADERS,
@@ -373,13 +412,13 @@ def homepage():
                     .then(response => response.json())
                     .then(data => {{
                         if(data.status === 'success') window.location.reload(); 
-                        else alert("Deployment Error: " + data.error);
+                        else alert("Patch Failed: " + data.error);
                     }});
                 }}
             }}
 
             function removeDevice(deviceName) {{
-                if(confirm("CRITICAL WARNING: Irreversibly purge " + deviceName + " from the mainframe?")) {{
+                if(confirm("AUTHORIZATION REQUIRED: Purge " + deviceName + " from the mainframe registry?")) {{
                     fetch('/api/device/remove', {{
                         method: 'POST',
                         headers: API_HEADERS,
@@ -410,25 +449,30 @@ def query_devices(device_name):
         request_data = request.get_json()
         firmware_version = request_data.get('firmware_version') if request_data else None
 
-    # Revamped the Result Page with Bootstrap too!
+    # Revamped Result Page for Dark Theme
     result_html = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <title>Audit Result</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-        <style>body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }</style>
+        <style>
+            body { background-color: #090814; color: #f8f9fa; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+            .card { background-color: #14122b; border: 1px solid #2b2757; border-radius: 8px; max-width: 500px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+            .terminal-box { background-color: rgba(0,0,0,0.3); border: 1px solid #2b2757; border-radius: 4px; padding: 15px; font-family: 'Roboto Mono', monospace; margin-bottom: 20px;}
+            .btn-cyber { background-color: transparent; color: #fff; border: 1px solid #2b2757; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; padding: 12px; transition: 0.3s; }
+            .btn-cyber:hover { background-color: rgba(255,255,255,0.05); color: #fff; border-color: #8b87a8;}
+        </style>
     </head>
     <body>
-        <div class="card shadow-sm border-0" style="max-width: 500px; width: 100%;">
-            <div class="card-body text-center p-5">
-                <div class="mb-4">{{ icon }}</div>
-                <h2 class="fw-bold {{ text_class }} mb-3">{{ title }}</h2>
-                <div class="bg-light p-3 rounded mb-4 fw-bold text-secondary">{{ device }}</div>
-                <p class="text-muted mb-4 fs-5">{{ message | safe }}</p>
-                <a href="/" class="btn btn-outline-secondary w-100 fw-bold"><i class="bi bi-arrow-left me-2"></i>Return to Hub</a>
-            </div>
+        <div class="card p-5 text-center">
+            <div class="mb-4">{{ icon }}</div>
+            <h2 class="fw-bold mb-3" style="color: {{ text_color }}; text-transform: uppercase; letter-spacing: 2px;">{{ title }}</h2>
+            <div class="terminal-box fw-bold text-secondary">{{ device }}</div>
+            <p class="text-muted mb-5 fs-6">{{ message | safe }}</p>
+            <a href="/" class="btn btn-cyber w-100"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
         </div>
     </body>
     </html>
@@ -437,7 +481,7 @@ def query_devices(device_name):
     if not firmware_version:
         if is_machine: 
             return jsonify({"error": "Missing firmware_version parameter"}), 400
-        return render_template_string(result_html, text_class="text-danger", icon='<i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>', title="System Error", device=clean_device_name, message="Missing firmware_version parameter."), 400
+        return render_template_string(result_html, text_color="#ff3366", icon='<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', title="System Error", device=clean_device_name, message="Missing firmware_version parameter."), 400
 
     device_doc = devices_collection.find_one({"device_name": clean_device_name})
 
@@ -446,15 +490,15 @@ def query_devices(device_name):
         if current_version == firmware_version:
             if is_machine: 
                 return jsonify({"status": "up_to_date", "current_version": current_version}), 200
-            return render_template_string(result_html, text_class="text-success", icon='<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>', title="Integrity Verified", device=clean_device_name, message=f"Device is running the latest authorized firmware ({current_version})."), 200
+            return render_template_string(result_html, text_color="#00ff88", icon='<i class="bi bi-shield-fill-check" style="font-size: 4rem; color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.4);"></i>', title="Integrity Verified", device=clean_device_name, message=f"Target is running the latest authorized baseline (v{current_version})."), 200
         else:
             if is_machine: 
                 return jsonify({"status": "update_required", "latest_version": current_version}), 200
-            return render_template_string(result_html, text_class="text-warning", icon='<i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 4rem;"></i>', title="Vulnerability Detected", device=clean_device_name, message=f"Reported version is {firmware_version}, but the secure baseline is <b>{current_version}</b>."), 200
+            return render_template_string(result_html, text_color="#ff9d00", icon='<i class="bi bi-shield-fill-exclamation" style="font-size: 4rem; color: #ff9d00; text-shadow: 0 0 20px rgba(255,157,0,0.4);"></i>', title="Vulnerability Detected", device=clean_device_name, message=f"Reported version is v{firmware_version}, but the secure baseline is <b>v{current_version}</b>. Immediate patching advised."), 200
 
     if is_machine: 
         return jsonify({"error": "Device not found."}), 404
-    return render_template_string(result_html, text_class="text-danger", icon='<i class="bi bi-question-circle-fill text-danger" style="font-size: 4rem;"></i>', title="Target Not Found", device=clean_device_name, message="Device not found in the Sauron database."), 404
+    return render_template_string(result_html, text_color="#8b87a8", icon='<i class="bi bi-question-square" style="font-size: 4rem; color: #8b87a8;"></i>', title="Unknown Target", device=clean_device_name, message="Target identity not found in the Sauron registry."), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)
