@@ -404,7 +404,8 @@ def query_devices(device_name):
     """
 
     if not firmware_version:
-        if is_machine: return jsonify({"error": "Missing firmware_version parameter"}), 400
+        if is_machine: 
+            return jsonify({"error": "Missing firmware_version parameter"}), 400
         return render_template_string(result_html, color_class="status-error", icon="❌", title="Error", device=clean_device_name, message="Missing firmware_version parameter."), 400
 
     device_doc = devices_collection.find_one({"device_name": clean_device_name})
@@ -412,14 +413,16 @@ def query_devices(device_name):
     if device_doc:
         current_version = device_doc.get("version")
         if current_version == firmware_version:
-            if is_machine: return jsonify({"status": "up_to_date", "current_version": current_version}), 200
+            if is_machine: 
+                return jsonify({"status": "up_to_date", "current_version": current_version}), 200
             return render_template_string(result_html, color_class="status-success", icon="✅", title="Up to Date!", device=clean_device_name, message=f"Device is running the latest firmware ({current_version})."), 200
         else:
-            if is_machine: return jsonify({"status": "update_required", "latest_version": current_version}), 200
+            if is_machine: 
+                return jsonify({"status": "update_required", "latest_version": current_version}), 200
             return render_template_string(result_html, color_class="status-warning", icon="⚠️", title="Update Required", device=clean_device_name, message=f"Your version is {firmware_version}, latest is <b>{current_version}</b>."), 200
 
-    if is_machine: return jsonify({"error": f"Device not found."}), 404
+    if is_machine: 
+        return jsonify({"error": "Device not found."}), 404
     return render_template_string(result_html, color_class="status-error", icon="❓", title="Not Found", device=clean_device_name, message="Device not found in database."), 404
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)

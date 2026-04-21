@@ -55,7 +55,6 @@ def listen_for_commands():
     print("🎧 Sauron Probe Active. Listening for C2 commands from AWS...")
     while True:
         try:
-            # INTEGRATED: Added headers=HEADERS here
             response = requests.get(POLL_URL, headers=HEADERS, timeout=5)
             
             if response.status_code == 200:
@@ -66,7 +65,7 @@ def listen_for_commands():
             elif response.status_code == 401:
                 print("🛑 Polling Blocked (Invalid API Key!). Check your .env setup.")
                 
-        except Exception as e:
+        except Exception:
             # Fail silently so the loop doesn't crash if the Wi-Fi drops momentarily
             pass
         
