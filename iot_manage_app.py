@@ -244,7 +244,7 @@ def homepage():
         <nav class="navbar navbar-expand-lg mb-5">
             <div class="container-fluid px-5">
                 <a class="navbar-brand d-flex align-items-center" href="#">
-                    <i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple); font-size: 1.5rem; text-shadow: var(--glow-purple);"></i>
+                    <i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple); text-shadow: var(--glow-purple);"></i>
                     SAURON PLATFORM
                 </a>
                 <button class="btn btn-cyber" onclick="triggerLanScan()">
@@ -282,7 +282,6 @@ def homepage():
         current_version = dev.get('version', 'Unknown')
         last_seen = format_time(dev.get('last_seen'))
         
-        # Status styling
         if status == "online":
             status_badge = '<span class="badge badge-online"><i class="bi bi-circle-fill me-1" style="font-size: 6px; vertical-align: middle;"></i> ONLINE</span>'
         else:
@@ -290,7 +289,6 @@ def homepage():
 
         target_version = LATEST_FIRMWARE.get(name)
         
-        # Firmware styling
         ota_button = ""
         if current_version == 'Unknown' or not target_version:
             fw_display = f'<span class="text-muted fw-bold" style="font-size: 0.85rem;"><i class="bi bi-dash-circle me-1"></i> UNKNOWN ({current_version})</span>'
@@ -302,7 +300,6 @@ def homepage():
 
         delete_button = f'<button class="btn btn-sm btn-cyber-outline" style="padding: 5px 10px;" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3"></i></button>'
 
-        # Telemetry combining
         telemetry = f'<span class="me-3" style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-lightning-charge-fill text-muted me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
         telemetry += f'<span style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-thermometer-half text-muted me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
 
@@ -449,7 +446,6 @@ def query_devices(device_name):
         request_data = request.get_json()
         firmware_version = request_data.get('firmware_version') if request_data else None
 
-    # Revamped Result Page for Dark Theme
     result_html = """
     <!DOCTYPE html>
     <html lang="en">
