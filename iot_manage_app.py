@@ -125,18 +125,18 @@ def login():
 
             <form method="POST" action="/login">
                 <div class="mb-3">
-                    <label class="form-label">OPERATOR ID</label>
+                    <label class="form-label">USERNAME</label>
                     <input type="text" name="username" class="form-control" required autocomplete="off">
                 </div>
                 <div class="mb-4">
-                    <label class="form-label">PASSPHRASE</label>
+                    <label class="form-label">PASSWORD</label>
                     <input type="password" name="password" class="form-control" required>
                 </div>
                 <button type="submit" class="btn btn-cyber mb-4">AUTHENTICATE</button>
             </form>
             
             <div class="text-center border-top border-secondary pt-3 mt-2">
-                <a href="/register" class="cyber-link">PROVISION NEW OPERATOR &rarr;</a>
+                <a href="/register" class="cyber-link">CREATE ACCOUNT &rarr;</a>
             </div>
         </div>
     </body>
@@ -144,7 +144,7 @@ def login():
     """
     return html_page
 
-# --- NEW: Registration Route ---
+# --- Registration Route ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if 'user' in session:
@@ -158,7 +158,7 @@ def register():
         
         # 1. Check if username already exists to prevent duplicates
         if users_collection.find_one({"username": username}):
-            error_msg = '<div class="alert alert-warning" style="background-color: rgba(255, 157, 0, 0.1); border: 1px solid #ff9d00; color: #ff9d00; padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px;">OPERATOR ID ALREADY IN USE</div>'
+            error_msg = '<div class="alert alert-warning" style="background-color: rgba(255, 157, 0, 0.1); border: 1px solid #ff9d00; color: #ff9d00; padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px;">USERNAME ALREADY IN USE</div>'
         else:
             # 2. Hash the password and save the new user
             users_collection.insert_one({
@@ -173,7 +173,7 @@ def register():
     <!DOCTYPE html>
     <html lang="en">
     <head>
-        <title>Sauron Hub | Provisioning</title>
+        <title>Sauron Hub | Create Account</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
@@ -193,22 +193,22 @@ def register():
         <div class="card p-5">
             <div class="text-center mb-4">
                 <i class="bi bi-person-plus-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
-                <h3 class="fw-bold mt-3" style="letter-spacing: 2px;">PROVISION OPERATOR</h3>
-                <p class="text-muted small">CREATE NEW CLEARANCE TIER</p>
+                <h3 class="fw-bold mt-3" style="letter-spacing: 2px;">CREATE ACCOUNT</h3>
+                <p class="text-muted small">REQUEST PLATFORM ACCESS</p>
             </div>
             
             {error_msg}
 
             <form method="POST" action="/register">
                 <div class="mb-3">
-                    <label class="form-label">NEW OPERATOR ID</label>
+                    <label class="form-label">NEW USERNAME</label>
                     <input type="text" name="username" class="form-control" required autocomplete="off">
                 </div>
                 <div class="mb-4">
-                    <label class="form-label">ASSIGN PASSPHRASE</label>
+                    <label class="form-label">CREATE PASSWORD</label>
                     <input type="password" name="password" class="form-control" required minlength="6">
                 </div>
-                <button type="submit" class="btn btn-cyber mb-4">INITIALIZE ACCOUNT</button>
+                <button type="submit" class="btn btn-cyber mb-4">REGISTER</button>
             </form>
             
             <div class="text-center border-top border-secondary pt-3 mt-2">
@@ -371,6 +371,7 @@ def homepage():
     firmware_docs = firmware_collection.find()
     LATEST_FIRMWARE = {doc['model']: doc['latest_version'] for doc in firmware_docs}
     
+    # Grab the logged-in username to display on the dashboard
     operator_name = session.get('user', 'Operator').upper()
 
     def format_time(dt):
@@ -442,7 +443,7 @@ def homepage():
                 </a>
                 
                 <div class="d-flex align-items-center">
-                    <span class="text-muted small fw-bold me-4"><i class="bi bi-person-bounding-box me-2"></i>OPERATOR: {operator_name}</span>
+                    <span class="text-muted small fw-bold me-4"><i class="bi bi-person-bounding-box me-2"></i>USER: {operator_name}</span>
                     <button class="btn btn-cyber me-3" onclick="triggerLanScan()">
                         <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
                     </button>
@@ -668,7 +669,7 @@ def query_devices(device_name):
             <h2 class="fw-bold mb-3" style="color: {{ text_color }}; text-transform: uppercase; letter-spacing: 2px;">{{ title }}</h2>
             <div class="terminal-box fw-bold text-secondary">{{ device }}</div>
             <p class="text-muted mb-5 fs-6">{{ message | safe }}</p>
-            <a href="/" class="btn btn-cyber w-100"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
+            <a href="/" class="btn-cyber w-100 text-decoration-none d-block"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
         </div>
     </body>
     </html>
