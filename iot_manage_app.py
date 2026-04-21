@@ -116,9 +116,9 @@ def login():
     <body>
         <div class="card p-5">
             <div class="text-center mb-4">
-                <i class="bi bi-hexagon-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
-                <h3 class="fw-bold mt-3" style="letter-spacing: 2px;">SAURON LOGIN</h3>
-                <p class="text-muted small">AUTHORIZED PERSONNEL ONLY</p>
+                <i class="bi bi-person-plus-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
+                <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">CREATE ACCOUNT</h3>
+                <p class="small" style="color: #aeb2b8;">REQUEST PLATFORM ACCESS</p>
             </div>
             
             {error_msg}
@@ -192,9 +192,9 @@ def register():
     <body>
         <div class="card p-5">
             <div class="text-center mb-4">
-                <i class="bi bi-person-plus-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
-                <h3 class="fw-bold mt-3" style="letter-spacing: 2px;">CREATE ACCOUNT</h3>
-                <p class="text-muted small">REQUEST PLATFORM ACCESS</p>
+                <i class="bi bi-hexagon-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
+                <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">SAURON LOGIN</h3>
+                <p class="small" style="color: #aeb2b8;">AUTHORIZED PERSONNEL ONLY</p>
             </div>
             
             {error_msg}
