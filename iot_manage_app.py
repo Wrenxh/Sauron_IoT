@@ -254,8 +254,10 @@ def add_device():
     version = data.get("version", "").strip()
     owner = session.get('user')
     
-    if not owner: return jsonify({"error": "You must be logged in."}), 403
-    if not device_name: return jsonify({"error": "Device name cannot be empty."}), 400
+    if not owner:
+        return jsonify({"error": "You must be logged in."}), 403
+    if not device_name:
+        return jsonify({"error": "Device name cannot be empty."}), 400
     if devices_collection.find_one({"device_name": device_name, "owner": owner}):
         return jsonify({"error": "You already have a device with this name."}), 409
 
@@ -264,7 +266,9 @@ def add_device():
             "device_name": device_name,
             "owner": owner, 
             "version": version if version else "Unknown",
-            "status": "offline", "battery": "N/A", "temperature": "N/A"
+            "status": "offline", 
+            "battery": "N/A", 
+            "temperature": "N/A"
         })
         if not firmware_collection.find_one({"model": device_name}):
             firmware_collection.insert_one({"model": device_name, "latest_version": version if version else "1.0.0"})
@@ -279,11 +283,15 @@ def remove_device():
     device_name = data.get("device_name")
     owner = session.get('user')
 
-    if not device_name or not owner: return jsonify({"error": "Missing parameters"}), 400
+    if not device_name or not owner:
+        return jsonify({"error": "Missing parameters"}), 400
+        
     try:
         result = devices_collection.delete_one({"device_name": device_name, "owner": owner})
-        if result.deleted_count == 1: return jsonify({"status": "success"}), 200
-        else: return jsonify({"error": "Not found or lack clearance."}), 404
+        if result.deleted_count == 1:
+            return jsonify({"status": "success"}), 200
+        else:
+            return jsonify({"error": "Not found or lack clearance."}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
