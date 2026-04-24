@@ -481,13 +481,13 @@ def homepage():
                             <tr>
                                 <td colspan="6" class="text-center py-5">
                                     <i class="bi bi-radar" style="font-size: 3rem; color: #2b2757;"></i>
-                                    <h4 class="text-white mt-3 fw-bold" style="letter-spacing: 1px;">NO ENDPOINTS DETECTED</h4>
-                                    <p class="text-muted mb-4">The Sauron Hub is currently monitoring 0 active devices.</p>
+                                    <h4 class="mt-3 fw-bold" style="letter-spacing: 1px; color: #aeb2b8;">NO ENDPOINTS DETECTED</h4>
+                                    <p class="mb-4" style="color: #aeb2b8;">Sauron's Eye is currently monitoring 0 active devices.</p>
                                     <div class="d-flex justify-content-center gap-3">
                                         <button class="btn btn-cyber" onclick="triggerLanScan()">
                                             <i class="bi bi-search me-2"></i> INITIATE LAN SCAN
                                         </button>
-                                        <a href="#provision-card" class="btn btn-cyber-outline">
+                                        <a href="#provision-card" class="btn btn-cyber-outline" style="color: #aeb2b8; border-color: #aeb2b8;">
                                             <i class="bi bi-terminal me-2"></i> MANUAL PROVISION
                                         </a>
                                     </div>
