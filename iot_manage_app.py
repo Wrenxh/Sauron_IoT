@@ -97,6 +97,14 @@ def login():
     <!DOCTYPE html>
     <html lang="en">
     <head>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-4M4H383ZT1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', 'G-4M4H383ZT1');
+        </script>
+        <meta charset="UTF-8">
         <title>Sauron Hub | Authenticate</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -116,9 +124,9 @@ def login():
     <body>
         <div class="card p-5">
             <div class="text-center mb-4">
-                <i class="bi bi-person-plus-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
-                <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">CREATE ACCOUNT</h3>
-                <p class="small" style="color: #aeb2b8;">REQUEST PLATFORM ACCESS</p>
+                <i class="bi bi-hexagon-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
+                <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">SAURON LOGIN</h3>
+                <p class="small" style="color: #aeb2b8;">AUTHORIZED PERSONNEL ONLY</p>
             </div>
             
             {error_msg}
