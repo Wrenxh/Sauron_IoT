@@ -13,7 +13,6 @@ MONGO_URI = os.getenv("MONGO_URI")
 API_KEY = os.getenv("SAURON_API_KEY", "fallback_key_if_missing")
 
 app = Flask(__name__)
-# --- Flask Session Security Key ---
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_cookie_secret")
 
 # --- MongoDB Setup ---
@@ -24,10 +23,9 @@ logs_collection = db['device_logs']
 firmware_collection = db['firmware_versions']
 commands_collection = db['command_queue'] 
 users_collection = db['users'] 
+system_state = db['system_state'] 
 
-# --- Database Seeders ---
-# NOTE: The fake device seeder has been permanently removed for production!
-
+# --- Admin Seeder ---
 if users_collection.count_documents({}) == 0:
     print("Initializing default admin user...")
     users_collection.insert_one({
@@ -37,7 +35,6 @@ if users_collection.count_documents({}) == 0:
 
 
 # --- Security Bouncers ---
-
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -57,7 +54,6 @@ def login_required(f):
 
 
 # --- AUTHENTICATION ROUTES ---
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'user' in session:
@@ -250,13 +246,44 @@ def device_checkin():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/device/list', methods=['GET'])
+@app.route('/api/device/add', methods=['POST'])
 @require_api_key
-def get_device_list():
+def add_device():
+    data = request.get_json()
+    device_name = data.get("device_name", "").strip()
+    version = data.get("version", "").strip()
+    owner = session.get('user')
+    
+    if not owner: return jsonify({"error": "You must be logged in."}), 403
+    if not device_name: return jsonify({"error": "Device name cannot be empty."}), 400
+    if devices_collection.find_one({"device_name": device_name, "owner": owner}):
+        return jsonify({"error": "You already have a device with this name."}), 409
+
     try:
-        all_devices = list(devices_collection.find({}, {"_id": 0, "device_name": 1}))
-        device_names = [doc["device_name"] for doc in all_devices if "device_name" in doc]
-        return jsonify({"devices": device_names}), 200
+        devices_collection.insert_one({
+            "device_name": device_name,
+            "owner": owner, 
+            "version": version if version else "Unknown",
+            "status": "offline", "battery": "N/A", "temperature": "N/A"
+        })
+        if not firmware_collection.find_one({"model": device_name}):
+            firmware_collection.insert_one({"model": device_name, "latest_version": version if version else "1.0.0"})
+        return jsonify({"status": "success", "message": f"{device_name} added."}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/device/remove', methods=['POST'])
+@require_api_key
+def remove_device():
+    data = request.get_json()
+    device_name = data.get("device_name")
+    owner = session.get('user')
+
+    if not device_name or not owner: return jsonify({"error": "Missing parameters"}), 400
+    try:
+        result = devices_collection.delete_one({"device_name": device_name, "owner": owner})
+        if result.deleted_count == 1: return jsonify({"status": "success"}), 200
+        else: return jsonify({"error": "Not found or lack clearance."}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -279,67 +306,35 @@ def update_firmware():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/device/add', methods=['POST'])
-@require_api_key
-def add_device():
-    data = request.get_json()
-    device_name = data.get("device_name", "").strip()
-    version = data.get("version", "").strip()
 
-    if not device_name:
-        return jsonify({"error": "Device name cannot be empty."}), 400
-
-    if devices_collection.find_one({"device_name": device_name}):
-        return jsonify({"error": "A device with this name already exists."}), 409
-
-    try:
-        new_device = {
-            "device_name": device_name,
-            "version": version if version else "Unknown",
-            "status": "offline",
-            "battery": "N/A",
-            "temperature": "N/A"
-        }
-        devices_collection.insert_one(new_device)
-        
-        if not firmware_collection.find_one({"model": device_name}):
-            firmware_collection.insert_one({
-                "model": device_name, 
-                "latest_version": version if version else "1.0.0"
-            })
-
-        return jsonify({"status": "success", "message": f"{device_name} added successfully."}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/device/remove', methods=['POST'])
-@require_api_key
-def remove_device():
-    data = request.get_json()
-    device_name = data.get("device_name")
-
-    if not device_name:
-        return jsonify({"error": "Missing device_name"}), 400
-
-    try:
-        result = devices_collection.delete_one({"device_name": device_name})
-        if result.deleted_count == 1:
-            return jsonify({"status": "success", "message": f"{device_name} removed."}), 200
-        else:
-            return jsonify({"error": "Device not found."}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+# --- SCAN MANAGEMENT ROUTES ---
 
 @app.route('/api/probe/trigger_scan', methods=['POST'])
 @require_api_key
 def trigger_scan():
     try:
+        # Set status to active and provide an initial message
+        system_state.update_one(
+            {"setting": "scan_status"}, 
+            {"$set": {"is_scanning": True, "scan_message": "Initializing subnet sweep. Awaiting probe check-in..."}}, 
+            upsert=True
+        )
         commands_collection.update_one(
             {"target": "lan_probe"}, 
             {"$set": {"action": "scan_lan", "timestamp": datetime.utcnow()}},
             upsert=True
         )
         return jsonify({"status": "success", "message": "Scan command queued."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/probe/stop_scan', methods=['POST'])
+@require_api_key
+def stop_scan():
+    try:
+        system_state.update_one({"setting": "scan_status"}, {"$set": {"is_scanning": False, "scan_message": ""}}, upsert=True)
+        commands_collection.delete_many({"target": "lan_probe", "action": "scan_lan"})
+        return jsonify({"status": "success", "message": "Scan aborted."}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -355,17 +350,67 @@ def poll_commands():
     except Exception:
         return jsonify({"error": "Server error"}), 500
 
+# NEW: The Probe calls this to report its live progress
+@app.route('/api/probe/update_status', methods=['POST'])
+@require_api_key
+def update_probe_status():
+    try:
+        data = request.get_json()
+        message = data.get("message", "Mapping subnet...")
+        system_state.update_one({"setting": "scan_status"}, {"$set": {"scan_message": message}}, upsert=True)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# NEW: The UI calls this to pull the live progress
+@app.route('/api/probe/get_status', methods=['GET'])
+@login_required
+def get_probe_status():
+    try:
+        scan_doc = system_state.find_one({"setting": "scan_status"})
+        message = scan_doc.get("scan_message", "Awaiting telemetry...") if scan_doc else ""
+        return jsonify({"message": message}), 200
+    except Exception:
+        return jsonify({"message": "Link lost..."}), 500
+
 
 # --- Dashboard Routes (Human-facing, protected by Session) ---
 
 @app.route('/')
 @login_required  
 def homepage():
-    all_devices = list(devices_collection.find().sort("last_seen", -1))
+    operator_name = session.get('user', 'Operator').upper()
+    
+    all_devices = list(devices_collection.find({"owner": session.get('user')}).sort("last_seen", -1))
     firmware_docs = firmware_collection.find()
     LATEST_FIRMWARE = {doc['model']: doc['latest_version'] for doc in firmware_docs}
     
-    operator_name = session.get('user', 'Operator').upper()
+    scan_doc = system_state.find_one({"setting": "scan_status"})
+    is_scanning = scan_doc.get("is_scanning", False) if scan_doc else False
+    current_scan_message = scan_doc.get("scan_message", "Awaiting telemetry...") if scan_doc else "Awaiting telemetry..."
+
+    # Dynamic UI elements
+    if is_scanning:
+        scan_btn_html = """
+            <button class="btn btn-danger me-3" onclick="stopLanScan()" style="font-weight: 700; letter-spacing: 1px; font-size: 0.8rem; box-shadow: 0 0 20px rgba(255, 51, 102, 0.4);">
+                <i class="bi bi-stop-circle me-2"></i> ABORT SCAN
+            </button>
+        """
+        scan_banner_html = f"""
+            <div class="alert mb-4 d-flex align-items-center" style="background-color: rgba(157, 78, 221, 0.1); border: 1px solid var(--primary-purple); color: white; border-radius: 6px;">
+                <span class="spinner-grow spinner-grow-sm me-3" style="color: var(--primary-purple);" role="status"></span>
+                <div>
+                    <strong style="color: var(--primary-purple); letter-spacing: 1px;">ACTIVE RECONNAISSANCE:</strong> <span id="live-scan-status" style="font-family: 'Roboto Mono', monospace;">{current_scan_message}</span>
+                </div>
+            </div>
+        """
+    else:
+        scan_btn_html = """
+            <button class="btn btn-cyber me-3" onclick="triggerLanScan()">
+                <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
+            </button>
+        """
+        scan_banner_html = ""
 
     def format_time(dt):
         return dt.strftime('%b %d, %H:%M:%S') if dt else "Never"
@@ -446,15 +491,15 @@ def homepage():
                     <span class="small fw-bold me-4" style="color: #aeb2b8; letter-spacing: 1px;">
                         <i class="bi bi-person-bounding-box me-2" style="color: #9d4edd;"></i>USER: <span class="text-white">{operator_name}</span>
                     </span>
-                    <button class="btn btn-cyber me-3" onclick="triggerLanScan()">
-                        <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
-                    </button>
+                    {scan_btn_html}
                     <a href="/logout" class="btn btn-cyber-outline"><i class="bi bi-box-arrow-right me-1"></i> DISCONNECT</a>
                 </div>
             </div>
         </nav>
 
         <div class="container-fluid px-5">
+            {scan_banner_html}
+            
             <div class="card mb-5">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-hdd-stack text-muted me-2"></i>Endpoint Telemetry</span>
@@ -475,7 +520,6 @@ def homepage():
                         <tbody>
     """
 
-    # NEW: The sleek Empty State UI
     if not all_devices:
         html_page += """
                             <tr>
@@ -591,9 +635,25 @@ def homepage():
                 'X-Api-Key': '{API_KEY}' 
             }};
 
+            // NEW: Background poller for live status text
+            if(document.getElementById('live-scan-status')) {{
+                setInterval(() => {{
+                    fetch('/api/probe/get_status')
+                    .then(res => res.json())
+                    .then(data => {{
+                        document.getElementById('live-scan-status').innerText = data.message;
+                    }});
+                }}, 1500); 
+            }}
+
             function triggerLanScan() {{
                 fetch('/api/probe/trigger_scan', {{ method: 'POST', headers: API_HEADERS }})
-                .then(() => alert("[COMMAND SENT] Sauron Probe activated. Awaiting remote telemetry..."));
+                .then(() => window.location.reload());
+            }}
+
+            function stopLanScan() {{
+                fetch('/api/probe/stop_scan', {{ method: 'POST', headers: API_HEADERS }})
+                .then(() => window.location.reload());
             }}
 
             document.getElementById('queryForm').addEventListener('submit', function(e) {{
