@@ -26,23 +26,7 @@ commands_collection = db['command_queue']
 users_collection = db['users'] 
 
 # --- Database Seeders ---
-if devices_collection.count_documents({}) == 0:
-    devices_collection.insert_many([
-        {"device_name": "Ring Doorbell", "company": "Amazon", "version": "19.4.2400"},
-        {"device_name": "Echo 4th gen", "company": "Amazon", "version": "12584493188"},
-        {"device_name": "Google Home", "company": "Google", "version": "3.77.510748"},
-        {"device_name": "Nest Outdoor Cam", "company": "Google", "version": "1.71"},
-        {"device_name": "Philips Hue Bulb", "company": "Philips", "version": "1.86.7"}
-    ])
-
-if firmware_collection.count_documents({}) == 0:
-    firmware_collection.insert_many([
-        {"model": "Ring Doorbell", "latest_version": "19.4.2400"},
-        {"model": "Echo 4th gen", "latest_version": "12584493188"},
-        {"model": "Google Home", "latest_version": "3.77.510748"},
-        {"model": "Nest Outdoor Cam", "latest_version": "1.72"}, 
-        {"model": "Philips Hue Bulb", "latest_version": "1.86.7"}
-    ])
+# NOTE: The fake device seeder has been permanently removed for production!
 
 if users_collection.count_documents({}) == 0:
     print("Initializing default admin user...")
@@ -104,7 +88,6 @@ def login():
           gtag('js', new Date());
           gtag('config', 'G-4M4H383ZT1');
         </script>
-        <meta charset="UTF-8">
         <title>Sauron Hub | Authenticate</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -152,7 +135,6 @@ def login():
     """
     return html_page
 
-# --- Registration Route ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if 'user' in session:
@@ -164,16 +146,13 @@ def register():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # 1. Check if username already exists to prevent duplicates
         if users_collection.find_one({"username": username}):
             error_msg = '<div class="alert alert-warning" style="background-color: rgba(255, 157, 0, 0.1); border: 1px solid #ff9d00; color: #ff9d00; padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px;">USERNAME ALREADY IN USE</div>'
         else:
-            # 2. Hash the password and save the new user
             users_collection.insert_one({
                 "username": username,
                 "password": generate_password_hash(password)
             })
-            # 3. Log them in immediately and send them to the dashboard
             session['user'] = username 
             return redirect(url_for('homepage'))
 
@@ -181,6 +160,13 @@ def register():
     <!DOCTYPE html>
     <html lang="en">
     <head>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-4M4H383ZT1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', 'G-4M4H383ZT1');
+        </script>
         <title>Sauron Hub | Create Account</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -200,9 +186,9 @@ def register():
     <body>
         <div class="card p-5">
             <div class="text-center mb-4">
-                <i class="bi bi-hexagon-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
-                <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">SAURON LOGIN</h3>
-                <p class="small" style="color: #aeb2b8;">AUTHORIZED PERSONNEL ONLY</p>
+                <i class="bi bi-person-plus-fill" style="color: #9d4edd; font-size: 3rem; text-shadow: 0 0 20px rgba(157, 78, 221, 0.4);"></i>
+                <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">CREATE ACCOUNT</h3>
+                <p class="small" style="color: #aeb2b8;">REQUEST PLATFORM ACCESS</p>
             </div>
             
             {error_msg}
@@ -379,7 +365,6 @@ def homepage():
     firmware_docs = firmware_collection.find()
     LATEST_FIRMWARE = {doc['model']: doc['latest_version'] for doc in firmware_docs}
     
-    # Grab the logged-in username to display on the dashboard
     operator_name = session.get('user', 'Operator').upper()
 
     def format_time(dt):
@@ -389,6 +374,13 @@ def homepage():
     <!DOCTYPE html>
     <html lang="en">
     <head>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-4M4H383ZT1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', 'G-4M4H383ZT1');
+        </script>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Sauron Hub | Dashboard</title>
@@ -417,7 +409,7 @@ def homepage():
             .navbar {{ background-color: rgba(20, 18, 43, 0.8) !important; backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); padding: 15px 0; }}
             .navbar-brand {{ color: #fff !important; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }}
             
-            .card {{ background-color: var(--surface); border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-radius: 6px; }}
+            .card {{ background-color: var(--surface); border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-radius: 6px; scroll-margin-top: 100px; }}
             .card-header {{ background-color: transparent; border-bottom: 1px solid var(--border-color); padding: 15px 20px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }}
             
             .table-container {{ padding: 0; }}
@@ -433,7 +425,7 @@ def homepage():
             
             .btn-cyber {{ background-color: var(--primary-purple); color: white; border: none; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 0.8rem; border-radius: 4px; padding: 10px 20px; box-shadow: var(--glow-purple); transition: all 0.3s ease; }}
             .btn-cyber:hover {{ background-color: #b166eb; color: white; box-shadow: 0 0 30px rgba(157, 78, 221, 0.6); transform: translateY(-1px); }}
-            .btn-cyber-outline {{ background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; }}
+            .btn-cyber-outline {{ background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; text-decoration: none; display: inline-block; padding: 10px 20px; border-radius: 4px;}}
             .btn-cyber-outline:hover {{ background-color: rgba(255,255,255,0.05); color: white; border-color: var(--text-muted); }}
             
             .form-control {{ background-color: rgba(0,0,0,0.3) !important; border: 1px solid var(--border-color) !important; color: white !important; border-radius: 4px; padding: 12px; font-family: 'Roboto Mono', monospace; font-size: 0.9rem; }}
@@ -443,7 +435,7 @@ def homepage():
         </style>
     </head>
     <body>
-        <nav class="navbar navbar-expand-lg mb-5">
+        <nav class="navbar navbar-expand-lg mb-5 sticky-top">
             <div class="container-fluid px-5">
                 <a class="navbar-brand d-flex align-items-center" href="#">
                     <i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple); text-shadow: var(--glow-purple);"></i>
@@ -451,7 +443,9 @@ def homepage():
                 </a>
                 
                 <div class="d-flex align-items-center">
-                    <span class="text-muted small fw-bold me-4"><i class="bi bi-person-bounding-box me-2"></i>USER: {operator_name}</span>
+                    <span class="small fw-bold me-4" style="color: #aeb2b8; letter-spacing: 1px;">
+                        <i class="bi bi-person-bounding-box me-2" style="color: #9d4edd;"></i>USER: <span class="text-white">{operator_name}</span>
+                    </span>
                     <button class="btn btn-cyber me-3" onclick="triggerLanScan()">
                         <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
                     </button>
@@ -481,48 +475,68 @@ def homepage():
                         <tbody>
     """
 
-    for dev in all_devices:
-        name = dev.get('device_name', 'Unknown')
-        status = dev.get('status', 'offline')
-        battery = dev.get('battery', 'N/A')
-        temp = dev.get('temperature', 'N/A')
-        current_version = dev.get('version', 'Unknown')
-        last_seen = format_time(dev.get('last_seen'))
-        
-        if status == "online":
-            status_badge = '<span class="badge badge-online"><i class="bi bi-circle-fill me-1" style="font-size: 6px; vertical-align: middle;"></i> ONLINE</span>'
-        else:
-            status_badge = '<span class="badge badge-offline"><i class="bi bi-circle-fill me-1" style="font-size: 6px; vertical-align: middle;"></i> OFFLINE</span>'
-
-        target_version = LATEST_FIRMWARE.get(name)
-        
-        ota_button = ""
-        if current_version == 'Unknown' or not target_version:
-            fw_display = f'<span class="text-muted fw-bold" style="font-size: 0.85rem;"><i class="bi bi-dash-circle me-1"></i> UNKNOWN ({current_version})</span>'
-        elif current_version == target_version:
-            fw_display = f'<span style="color: var(--success-green); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-check me-1"></i> COMPLIANT</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">v{current_version}</span>'
-        else:
-            fw_display = f'<span style="color: var(--danger-red); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-exclamation me-1"></i> VULNERABLE</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">({current_version} &rarr; {target_version})</span>'
-            ota_button = f'<button class="btn btn-sm btn-cyber me-2" style="padding: 5px 10px; font-size: 0.7rem;" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Push Update">PATCH OTA</button>'
-
-        delete_button = f'<button class="btn btn-sm btn-cyber-outline" style="padding: 5px 10px;" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3"></i></button>'
-
-        telemetry = f'<span class="me-3" style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-lightning-charge-fill text-muted me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
-        telemetry += f'<span style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-thermometer-half text-muted me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
-
-        html_page += f"""
+    # NEW: The sleek Empty State UI
+    if not all_devices:
+        html_page += """
                             <tr>
-                                <td class="ps-4 device-name">{name}</td>
-                                <td>{status_badge}</td>
-                                <td>{telemetry}</td>
-                                <td>{fw_display}</td>
-                                <td style="font-family: 'Roboto Mono', monospace; font-size: 0.85rem; color: var(--text-muted);">{last_seen}</td>
-                                <td class="text-end pe-4">
-                                    {ota_button}
-                                    {delete_button}
+                                <td colspan="6" class="text-center py-5">
+                                    <i class="bi bi-radar" style="font-size: 3rem; color: #2b2757;"></i>
+                                    <h4 class="text-white mt-3 fw-bold" style="letter-spacing: 1px;">NO ENDPOINTS DETECTED</h4>
+                                    <p class="text-muted mb-4">The Sauron Hub is currently monitoring 0 active devices.</p>
+                                    <div class="d-flex justify-content-center gap-3">
+                                        <button class="btn btn-cyber" onclick="triggerLanScan()">
+                                            <i class="bi bi-search me-2"></i> INITIATE LAN SCAN
+                                        </button>
+                                        <a href="#provision-card" class="btn btn-cyber-outline">
+                                            <i class="bi bi-terminal me-2"></i> MANUAL PROVISION
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
         """
+    else:
+        for dev in all_devices:
+            name = dev.get('device_name', 'Unknown')
+            status = dev.get('status', 'offline')
+            battery = dev.get('battery', 'N/A')
+            temp = dev.get('temperature', 'N/A')
+            current_version = dev.get('version', 'Unknown')
+            last_seen = format_time(dev.get('last_seen'))
+            
+            if status == "online":
+                status_badge = '<span class="badge badge-online"><i class="bi bi-circle-fill me-1" style="font-size: 6px; vertical-align: middle;"></i> ONLINE</span>'
+            else:
+                status_badge = '<span class="badge badge-offline"><i class="bi bi-circle-fill me-1" style="font-size: 6px; vertical-align: middle;"></i> OFFLINE</span>'
+
+            target_version = LATEST_FIRMWARE.get(name)
+            
+            ota_button = ""
+            if current_version == 'Unknown' or not target_version:
+                fw_display = f'<span class="text-muted fw-bold" style="font-size: 0.85rem;"><i class="bi bi-dash-circle me-1"></i> UNKNOWN ({current_version})</span>'
+            elif current_version == target_version:
+                fw_display = f'<span style="color: var(--success-green); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-check me-1"></i> COMPLIANT</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">v{current_version}</span>'
+            else:
+                fw_display = f'<span style="color: var(--danger-red); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-exclamation me-1"></i> VULNERABLE</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">({current_version} &rarr; {target_version})</span>'
+                ota_button = f'<button class="btn btn-sm btn-cyber me-2" style="padding: 5px 10px; font-size: 0.7rem;" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Push Update">PATCH OTA</button>'
+
+            delete_button = f'<button class="btn btn-sm btn-cyber-outline" style="padding: 5px 10px;" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3"></i></button>'
+
+            telemetry = f'<span class="me-3" style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-lightning-charge-fill text-muted me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
+            telemetry += f'<span style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-thermometer-half text-muted me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
+
+            html_page += f"""
+                                <tr>
+                                    <td class="ps-4 device-name">{name}</td>
+                                    <td>{status_badge}</td>
+                                    <td>{telemetry}</td>
+                                    <td>{fw_display}</td>
+                                    <td style="font-family: 'Roboto Mono', monospace; font-size: 0.85rem; color: var(--text-muted);">{last_seen}</td>
+                                    <td class="text-end pe-4">
+                                        {ota_button}
+                                        {delete_button}
+                                    </td>
+                                </tr>
+            """
 
     html_page += f"""
                         </tbody>
@@ -532,7 +546,7 @@ def homepage():
 
             <div class="row g-4 mb-5">
                 <div class="col-md-6">
-                    <div class="card h-100">
+                    <div class="card h-100" id="provision-card">
                         <div class="card-header"><i class="bi bi-terminal me-2"></i>Provision Endpoint</div>
                         <div class="card-body p-4">
                             <form id="addDeviceForm">
