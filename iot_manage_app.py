@@ -755,7 +755,7 @@ def query_devices(device_name):
     </head>
     <body>
         <div class="card p-5 text-center">
-            <div class="mb-4">{{ icon }}</div>
+            <div class="mb-4">{{ icon | safe }}</div>
             <h2 class="fw-bold mb-3" style="color: {{ text_color }}; text-transform: uppercase; letter-spacing: 2px;">{{ title }}</h2>
             <div class="terminal-box fw-bold text-secondary">{{ device }}</div>
             <p class="text-muted mb-5 fs-6">{{ message | safe }}</p>
@@ -769,6 +769,25 @@ def query_devices(device_name):
         if is_machine: 
             return jsonify({"error": "Missing firmware_version parameter"}), 400
         return render_template_string(result_html, text_color="#ff3366", icon='<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', title="System Error", device=clean_device_name, message="Missing firmware_version parameter."), 400
+
+    device_doc = devices_collection.find_one({"device_name": clean_device_name})
+
+    if device_doc:
+        current_version = device_doc.get("version")
+        if current_version == firmware_version:
+            if is_machine: 
+                return jsonify({"status": "up_to_date", "current_version": current_version}), 200
+            return render_template_string(result_html, text_color="#00ff88", icon='<i class="bi bi-shield-fill-check" style="font-size: 4rem; color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.4);"></i>', title="Integrity Verified", device=clean_device_name, message=f"Target is running the latest authorized baseline (v{current_version})."), 200
+        else:
+            if is_machine: 
+                return jsonify({"status": "update_required", "latest_version": current_version}), 200
+            return render_template_string(result_html, text_color="#ff9d00", icon='<i class="bi bi-shield-fill-exclamation" style="font-size: 4rem; color: #ff9d00; text-shadow: 0 0 20px rgba(255,157,0,0.4);"></i>', title="Vulnerability Detected", device=clean_device_name, message=f"Reported version is v{firmware_version}, but the secure baseline is <b>v{current_version}</b>. Immediate patching advised."), 200
+
+    if is_machine: 
+        return jsonify({"error": "Device not found."}), 404
+        
+    # FIXED: Updated text_color to white (#f8f9fa) and icon color to a deep background shade (#2b2757)
+    return render_template_string(result_html, text_color="#f8f9fa", icon='<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', title="Unknown Target", device=clean_device_name, message="Target identity not found in the Sauron registry."), 404
 
     device_doc = devices_collection.find_one({"device_name": clean_device_name})
 
