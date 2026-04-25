@@ -5,6 +5,7 @@ from datetime import datetime
 from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # --- Load Secrets ---
 load_dotenv() 
@@ -321,7 +322,6 @@ def update_firmware():
 @require_api_key
 def trigger_scan():
     try:
-        # Set status to active and provide an initial message
         system_state.update_one(
             {"setting": "scan_status"}, 
             {"$set": {"is_scanning": True, "scan_message": "Initializing subnet sweep. Awaiting probe check-in..."}}, 
@@ -358,7 +358,6 @@ def poll_commands():
     except Exception:
         return jsonify({"error": "Server error"}), 500
 
-# NEW: The Probe calls this to report its live progress
 @app.route('/api/probe/update_status', methods=['POST'])
 @require_api_key
 def update_probe_status():
@@ -370,7 +369,6 @@ def update_probe_status():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# NEW: The UI calls this to pull the live progress
 @app.route('/api/probe/get_status', methods=['GET'])
 @login_required
 def get_probe_status():
@@ -397,7 +395,6 @@ def homepage():
     is_scanning = scan_doc.get("is_scanning", False) if scan_doc else False
     current_scan_message = scan_doc.get("scan_message", "Awaiting telemetry...") if scan_doc else "Awaiting telemetry..."
 
-    # Dynamic UI elements
     if is_scanning:
         scan_btn_html = """
             <button class="btn btn-danger me-3" onclick="stopLanScan()" style="font-weight: 700; letter-spacing: 1px; font-size: 0.8rem; box-shadow: 0 0 20px rgba(255, 51, 102, 0.4);">
@@ -643,7 +640,6 @@ def homepage():
                 'X-Api-Key': '{API_KEY}' 
             }};
 
-            // NEW: Background poller for live status text
             if(document.getElementById('live-scan-status')) {{
                 setInterval(() => {{
                     fetch('/api/probe/get_status')
@@ -737,56 +733,118 @@ def query_devices(device_name):
         request_data = request.get_json()
         firmware_version = request_data.get('firmware_version') if request_data else None
 
-    result_html = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <title>Audit Result</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-        <style>
-            body { background-color: #090814; color: #f8f9fa; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-            .card { background-color: #14122b; border: 1px solid #2b2757; border-radius: 8px; max-width: 500px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-            .terminal-box { background-color: rgba(0,0,0,0.3); border: 1px solid #2b2757; border-radius: 4px; padding: 15px; font-family: 'Roboto Mono', monospace; margin-bottom: 20px;}
-            .btn-cyber { background-color: transparent; color: #fff; border: 1px solid #2b2757; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; padding: 12px; transition: 0.3s; }
-            .btn-cyber:hover { background-color: rgba(255,255,255,0.05); color: #fff; border-color: #8b87a8;}
-        </style>
-    </head>
-    <body>
-        <div class="card p-5 text-center">
-            <div class="mb-4">{{ icon | safe }}</div>
-            <h2 class="fw-bold mb-3" style="color: {{ text_color }}; text-transform: uppercase; letter-spacing: 2px;">{{ title }}</h2>
-            <div class="terminal-box fw-bold text-secondary">{{ device }}</div>
-            <p class="mb-5 fs-6" style="color: #aeb2b8;">{{ message | safe }}</p>
-            <a href="/" class="btn-cyber w-100 text-decoration-none d-block"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
-        </div>
-    </body>
-    </html>
-    """
+    def build_audit_html(text_color, icon, title, message, threat_box=""):
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <title>Audit Result | Sauron Hub</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+            <style>
+                body {{ background-color: #090814; color: #f8f9fa; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }}
+                .card {{ background-color: #14122b; border: 1px solid #2b2757; border-radius: 8px; max-width: 500px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }}
+                .terminal-box {{ background-color: rgba(0,0,0,0.3); border: 1px solid #2b2757; border-radius: 4px; padding: 15px; font-family: 'Roboto Mono', monospace; margin-bottom: 20px;}}
+                .btn-cyber {{ background-color: transparent; color: #fff; border: 1px solid #2b2757; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; padding: 12px; transition: 0.3s; }}
+                .btn-cyber:hover {{ background-color: rgba(255,255,255,0.05); color: #fff; border-color: #8b87a8;}}
+            </style>
+        </head>
+        <body>
+            <div class="card p-5 text-center">
+                <div class="mb-4">{icon}</div>
+                <h2 class="fw-bold mb-3" style="color: {text_color}; text-transform: uppercase; letter-spacing: 2px;">{title}</h2>
+                <div class="terminal-box fw-bold text-secondary">{clean_device_name}</div>
+                <p class="mb-4 fs-6" style="color: #aeb2b8;">{message}</p>
+                {threat_box}
+                <a href="/" class="btn-cyber w-100 text-decoration-none d-block mt-4"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
+            </div>
+        </body>
+        </html>
+        """
 
     if not firmware_version:
-        if is_machine: 
-            return jsonify({"error": "Missing firmware_version parameter"}), 400
-        return render_template_string(result_html, text_color="#ff3366", icon='<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', title="System Error", device=clean_device_name, message="Missing firmware_version parameter."), 400
+        if is_machine: return jsonify({"error": "Missing firmware_version parameter"}), 400
+        return build_audit_html("#ff3366", '<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', "System Error", "Missing firmware_version parameter."), 400
 
     device_doc = devices_collection.find_one({"device_name": clean_device_name})
 
     if device_doc:
         current_version = device_doc.get("version")
         if current_version == firmware_version:
-            if is_machine: 
-                return jsonify({"status": "up_to_date", "current_version": current_version}), 200
-            return render_template_string(result_html, text_color="#00ff88", icon='<i class="bi bi-shield-fill-check" style="font-size: 4rem; color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.4);"></i>', title="Integrity Verified", device=clean_device_name, message=f"Target is running the latest authorized baseline (v{current_version})."), 200
+            if is_machine: return jsonify({"status": "up_to_date", "current_version": current_version}), 200
+            return build_audit_html("#00ff88", '<i class="bi bi-shield-fill-check" style="font-size: 4rem; color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.4);"></i>', "Integrity Verified", f"Target is running the latest authorized baseline (v{current_version})."), 200
         else:
-            if is_machine: 
-                return jsonify({"status": "update_required", "latest_version": current_version}), 200
-            return render_template_string(result_html, text_color="#ff9d00", icon='<i class="bi bi-shield-fill-exclamation" style="font-size: 4rem; color: #ff9d00; text-shadow: 0 0 20px rgba(255,157,0,0.4);"></i>', title="Vulnerability Detected", device=clean_device_name, message=f"Reported version is v{firmware_version}, but the secure baseline is <b>v{current_version}</b>. Immediate patching advised."), 200
+            if is_machine: return jsonify({"status": "update_required", "latest_version": current_version}), 200
+            
+            # Fetch threat intel to display on the vulnerability screen
+            fw_doc = firmware_collection.find_one({"model": clean_device_name})
+            threat_box = ""
+            if fw_doc and "release_notes" in fw_doc:
+                severity = fw_doc.get("severity", "WARNING")
+                notes = fw_doc.get("release_notes")
+                threat_box = f"""
+                <div class="alert text-start p-3" style="background-color: rgba(255, 51, 102, 0.05); border: 1px solid rgba(255, 51, 102, 0.3); border-radius: 4px;">
+                    <div style="color: #ff3366; font-size: 0.75rem; font-weight: 800; letter-spacing: 1px; margin-bottom: 5px;"><i class="bi bi-bug-fill me-1"></i> THREAT INTEL: SEVERITY {severity}</div>
+                    <div style="color: #f8f9fa; font-size: 0.85rem; font-family: 'Roboto Mono', monospace;">{notes}</div>
+                </div>
+                """
 
-    if is_machine: 
-        return jsonify({"error": "Device not found."}), 404
-        
-    return render_template_string(result_html, text_color="#f8f9fa", icon='<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', title="Unknown Target", device=clean_device_name, message="Target identity not found in the Sauron registry."), 404
+            return build_audit_html("#ff9d00", '<i class="bi bi-shield-fill-exclamation" style="font-size: 4rem; color: #ff9d00; text-shadow: 0 0 20px rgba(255,157,0,0.4);"></i>', "Vulnerability Detected", f"Reported version is v{firmware_version}, but the secure baseline is <b>v{current_version}</b>. Immediate patching advised.", threat_box), 200
+
+    if is_machine: return jsonify({"error": "Device not found."}), 404
+    return build_audit_html("#f8f9fa", '<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', "Unknown Target", "Target identity not found in the Sauron registry."), 404
+
+# --- AUTOMATED THREAT INTEL ENGINE ---
+def fetch_global_threat_intel():
+    """
+    Background job that runs every 24 hours to pull new CVEs and firmware baselines.
+    Simulating a comprehensive feed of the most common consumer IoT devices.
+    """
+    print("\n[SAURON INTEL] Waking up. Polling global threat feeds...")
+    
+    try:
+        simulated_live_feed = [
+            {"model": "Google Home", "latest_version": "3.80.1111", "severity": "CRITICAL", "release_notes": "URGENT: Patches zero-day buffer overflow in mDNS responder (CVE-2026-1094)."},
+            {"model": "Google Nest Hub", "latest_version": "Fuchsia 14.20230831.4", "severity": "MEDIUM", "release_notes": "Resolves minor UI thread locking and patches Cast protocol memory leak."},
+            {"model": "Echo 4th gen", "latest_version": "v12584499999", "severity": "MEDIUM", "release_notes": "Routine security patch addressing Bluetooth LE pairing vulnerabilities."},
+            {"model": "Apple HomePod mini", "latest_version": "AudioOS 17.4.1", "severity": "HIGH", "release_notes": "Addresses a WebKit vulnerability that could allow arbitrary code execution via malicious audio streams."},
+            {"model": "Nest Outdoor Cam", "latest_version": "v1.72", "severity": "CRITICAL", "release_notes": "Fixes cryptographic downgrade attack forcing unencrypted video broadcast."},
+            {"model": "Ring Video Doorbell", "latest_version": "v3.1.5", "severity": "HIGH", "release_notes": "Mitigates Wi-Fi deauthentication attack vector designed to blind the camera."},
+            {"model": "Wyze Cam v3", "latest_version": "4.36.11.8391", "severity": "CRITICAL", "release_notes": "Patches an unauthenticated remote access flaw allowing camera feed hijacking."},
+            {"model": "Arlo Pro 4", "latest_version": "1.080.20.1", "severity": "LOW", "release_notes": "Improves battery optimization and fixes a minor DNS resolution delay."},
+            {"model": "Nest Learning Thermostat", "latest_version": "6.2-27", "severity": "MEDIUM", "release_notes": "Patches a localized DoS vulnerability that could force the device into a reboot loop."},
+            {"model": "Ecobee SmartThermostat", "latest_version": "4.7.5.352", "severity": "LOW", "release_notes": "Fixes integration timeouts with third-party HVAC monitoring APIs."},
+            {"model": "Philips Hue Bridge", "latest_version": "v1.108.2", "severity": "HIGH", "release_notes": "Patches a Zigbee buffer overflow that could allow the bridge to be used as a persistent pivot point."},
+            {"model": "TP-Link Kasa Smart Plug", "latest_version": "1.0.8 Build 231115", "severity": "MEDIUM", "release_notes": "Secures local network API endpoints against unauthorized toggle commands."},
+            {"model": "Wemo Smart Plug", "latest_version": "v2.00.11420", "severity": "CRITICAL", "release_notes": "Addresses a severe UPnP vulnerability allowing remote arbitrary command execution."},
+            {"model": "Eero Pro 6", "latest_version": "v7.1.1-16", "severity": "HIGH", "release_notes": "Patches WPA3 downgrade vulnerability and improves mesh routing encryption."},
+            {"model": "Google Nest WiFi", "latest_version": "14150.376.32", "severity": "MEDIUM", "release_notes": "Resolves guest network isolation bypass under specific routing conditions."}
+        ]
+
+        updates_applied = 0
+        for intel in simulated_live_feed:
+            result = firmware_collection.update_one(
+                {"model": intel["model"]},
+                {"$set": {
+                    "latest_version": intel["latest_version"],
+                    "severity": intel["severity"],
+                    "release_notes": intel["release_notes"],
+                    "last_updated": datetime.utcnow()
+                }},
+                upsert=True
+            )
+            if result.modified_count > 0 or result.upserted_id:
+                updates_applied += 1
+
+        print(f"[SAURON INTEL] Polling complete. Registry updated with {updates_applied} firmware baselines.\n")
+
+    except Exception as e:
+        print(f"[SAURON INTEL] Error reaching threat feeds: {e}")
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24)
+scheduler.start()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)
