@@ -410,9 +410,13 @@ def homepage():
             </div>
         """
     else:
+        # VISUAL SHIFT: Navbar prioritizes adding devices
         scan_btn_html = """
-            <button class="btn btn-cyber me-3" onclick="triggerLanScan()">
-                <i class="bi bi-radar me-2"></i> INITIATE LAN SCAN
+            <a href="#provision-card" class="btn btn-cyber me-2" style="font-size: 0.8rem;">
+                <i class="bi bi-plus-lg me-2"></i> PROVISION DEVICE
+            </a>
+            <button class="btn btn-cyber-outline me-3" onclick="triggerLanScan()" title="Requires Local Agent" style="padding: 10px 15px;">
+                <i class="bi bi-radar"></i>
             </button>
         """
         scan_banner_html = ""
@@ -526,19 +530,21 @@ def homepage():
     """
 
     if not all_devices:
+        # VISUAL SHIFT: Empty State heavily drives manual provisioning
         html_page += """
                             <tr>
                                 <td colspan="6" class="text-center py-5">
-                                    <i class="bi bi-radar" style="font-size: 3rem; color: #2b2757;"></i>
+                                    <i class="bi bi-hdd-network" style="font-size: 3rem; color: #2b2757;"></i>
                                     <h4 class="mt-3 fw-bold" style="letter-spacing: 1px; color: #aeb2b8;">NO ENDPOINTS DETECTED</h4>
                                     <p class="mb-4" style="color: #aeb2b8;">Sauron's Eye is currently monitoring 0 active devices.</p>
-                                    <div class="d-flex justify-content-center gap-3">
-                                        <button class="btn btn-cyber" onclick="triggerLanScan()">
-                                            <i class="bi bi-search me-2"></i> INITIATE LAN SCAN
-                                        </button>
-                                        <a href="#provision-card" class="btn btn-cyber-outline" style="color: #aeb2b8; border-color: #aeb2b8;">
-                                            <i class="bi bi-terminal me-2"></i> MANUAL PROVISION
+                                    
+                                    <div class="d-flex flex-column align-items-center justify-content-center gap-3 mt-4">
+                                        <a href="#provision-card" class="btn btn-cyber px-5 py-2" style="font-size: 0.9rem;">
+                                            <i class="bi bi-terminal me-2"></i> MANUALLY PROVISION ENDPOINT
                                         </a>
+                                        <button class="btn btn-link text-muted text-decoration-none" onclick="triggerLanScan()" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                                            <i class="bi bi-radar me-1"></i> Run Advanced LAN Scan (Requires Local Agent)
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -601,12 +607,20 @@ def homepage():
                             <form id="addDeviceForm">
                                 <div class="mb-4">
                                     <label for="new_device_name" class="form-label">ENDPOINT ALIAS</label>
-                                    <input type="text" class="form-control" id="new_device_name" required placeholder="e.g. SRV-GARAGE-01">
+                                    <input type="text" class="form-control" id="new_device_name" required placeholder="e.g. Google Home">
                                 </div>
-                                <div class="mb-5">
+                                <div class="mb-4">
                                     <label for="new_device_version" class="form-label">BASELINE FIRMWARE</label>
-                                    <input type="text" class="form-control" id="new_device_version" placeholder="1.0.0">
+                                    <input type="text" class="form-control" id="new_device_version" placeholder="e.g. 1.0.0">
                                 </div>
+                                
+                                <div class="p-3 mb-4 rounded" style="background-color: rgba(157, 78, 221, 0.05); border: 1px dashed #2b2757;">
+                                    <p class="mb-0" style="font-size: 0.8rem; color: #aeb2b8; line-height: 1.5;">
+                                        <i class="bi bi-info-circle me-2" style="color: var(--primary-purple);"></i>
+                                        <strong>Quick Tip:</strong> If you don't know your device's current firmware version, feel free to ask it directly! <em>(e.g., "Hey Google, what is your firmware version?")</em>
+                                    </p>
+                                </div>
+
                                 <button type="submit" class="btn btn-cyber-outline w-100 py-2">REGISTER TO HUB</button>
                             </form>
                         </div>
@@ -768,7 +782,6 @@ def query_devices(device_name):
             return jsonify({"error": "Missing firmware_version parameter"}), 400
         return build_audit_html("#ff3366", '<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', "System Error", "Missing firmware_version parameter."), 400
 
-    # Query the global threat intel database using a case-insensitive regex search!
     fw_doc = firmware_collection.find_one({"model": {"$regex": f"^{clean_device_name}$", "$options": "i"}})
 
     if fw_doc:
@@ -782,7 +795,6 @@ def query_devices(device_name):
             if is_machine:
                 return jsonify({"status": "update_required", "latest_version": true_baseline}), 200
             
-            # Fetch threat intel
             severity = fw_doc.get("severity", "WARNING")
             notes = fw_doc.get("release_notes", "No additional context available.")
             threat_box = f"""
@@ -797,7 +809,7 @@ def query_devices(device_name):
     if is_machine:
         return jsonify({"error": "Device not found."}), 404
     return build_audit_html("#f8f9fa", '<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', "Unknown Target", "Target identity not found in the Sauron registry."), 404
-          
+
 # --- AUTOMATED THREAT INTEL ENGINE ---
 def fetch_global_threat_intel():
     """
