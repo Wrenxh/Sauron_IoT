@@ -37,11 +37,11 @@ firmware_collection = db['firmware_versions']
 commands_collection = db['command_queue'] 
 users_collection = db['users'] 
 system_state = db['system_state'] 
+probe_tokens_collection = db['probe_tokens'] # NEW: Tracking individual agent tokens
 
 # --- Admin Seeder ---
 if users_collection.count_documents({}) == 0:
     print("Initializing default admin user...")
-    # Fetch from environment, or generate a cryptographically secure random password
     admin_pass = os.getenv("SAURON_ADMIN_PWD", secrets.token_urlsafe(16))
     users_collection.insert_one({
         "username": "admin",
@@ -57,10 +57,17 @@ if users_collection.count_documents({}) == 0:
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if request.headers.get("X-Api-Key") == API_KEY:
+        provided_key = request.headers.get("X-Api-Key")
+        
+        # 1. Master Key Override (Required for the web dashboard UI javascript)
+        if provided_key == API_KEY:
             return f(*args, **kwargs)
-        else:
-            return jsonify({"error": "Unauthorized. Sauron does not recognize this key."}), 401
+            
+        # 2. Dynamic Probe Token Validation (Checks DB for isolated agent tokens)
+        if probe_tokens_collection.find_one({"token": provided_key, "status": "active"}):
+            return f(*args, **kwargs)
+            
+        return jsonify({"error": "Unauthorized. Token invalid or revoked."}), 401
     return decorated_function
 
 def login_required(f):
@@ -74,7 +81,7 @@ def login_required(f):
 
 # --- AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("5 per minute") # Strict rate limit to prevent brute forcing
+@limiter.limit("5 per minute") 
 def login():
     if 'user' in session:
         return redirect(url_for('homepage'))
@@ -342,12 +349,24 @@ def update_firmware():
 def download_probe():
     server_url = request.host_url.rstrip('/')
     
+    # NEW: Generate a cryptographically secure token specifically for this agent
+    unique_probe_token = f"sauron_pt_{secrets.token_hex(16)}"
+    
+    # Store the token in the database so the bouncer knows it is legitimate
+    probe_tokens_collection.insert_one({
+        "token": unique_probe_token,
+        "issued_by": session.get('user'),
+        "issued_at": datetime.utcnow(),
+        "status": "active"
+    })
+    
+    # Inject the unique token instead of the master API key
     probe_code = f"""import requests
 import time
 
 # --- PROBE CONFIGURATION ---
 C2_SERVER = "{server_url}" 
-API_KEY = "{API_KEY}"
+API_KEY = "{unique_probe_token}"
 
 HEADERS = {{
     "Content-Type": "application/json",
@@ -357,7 +376,7 @@ HEADERS = {{
 def update_c2_status(message):
     print(f"[*] {{message}}")
     try:
-        requests.post(f"{{C2_SERVER}}/api/probe/update_status", json={{"message": message}}, headers=HEADERS)
+        requests.post(f"{{C2_SERVER}}/api/probe/update_status", json={{"message": message}}, headers=HEADERS, verify=False)
     except Exception:
         pass
 
@@ -372,7 +391,7 @@ def execute_lan_scan():
     update_c2_status("Returning to stealth mode.")
     time.sleep(1)
     try:
-        requests.post(f"{{C2_SERVER}}/api/probe/stop_scan", headers=HEADERS)
+        requests.post(f"{{C2_SERVER}}/api/probe/stop_scan", headers=HEADERS, verify=False)
         print("[+] Scan finished. Awaiting next command.")
     except Exception:
         pass
@@ -382,10 +401,13 @@ def start_beacon():
     print(f"Targeting C2 Server: {{C2_SERVER}}")
     while True:
         try:
-            response = requests.get(f"{{C2_SERVER}}/api/probe/poll", headers=HEADERS)
+            response = requests.get(f"{{C2_SERVER}}/api/probe/poll", headers=HEADERS, verify=False)
             if response.status_code == 200 and response.json().get("command") == "scan_lan":
                 print("\\n[!] CRITICAL: LAN SCAN COMMAND RECEIVED FROM C2")
                 execute_lan_scan()
+            elif response.status_code == 401:
+                print("[-] CRITICAL ERROR: Access Token Revoked or Invalid. Terminating.")
+                break
         except Exception:
             print("[-] C2 Server unreachable. Retrying in 5 seconds...")
         time.sleep(3) 
@@ -893,7 +915,6 @@ def query_devices(device_name):
             return jsonify({"error": "Missing firmware_version parameter"}), 400
         return build_audit_html("#ff3366", '<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', "System Error", "Missing firmware_version parameter."), 400
 
-    # Escape the input to neutralize regex injection attacks (ReDoS)
     safe_device_name = re.escape(clean_device_name)
     fw_doc = firmware_collection.find_one({"model": {"$regex": f"^{safe_device_name}$", "$options": "i"}})
 
@@ -975,5 +996,4 @@ scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24, 
 scheduler.start()
 
 if __name__ == '__main__':
-    # 'adhoc' generates a self-signed cert on the fly for secure TLS traffic.
     app.run(host='0.0.0.0', port=5005, ssl_context='adhoc')
