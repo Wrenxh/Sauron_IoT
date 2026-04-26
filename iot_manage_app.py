@@ -7,6 +7,7 @@ from datetime import datetime
 from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix  # NEW: Handles NGINX IP routing
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -19,6 +20,9 @@ API_KEY = os.getenv("SAURON_API_KEY", "fallback_key_if_missing")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_cookie_secret")
+
+# NEW: Tell Flask to trust the real IPs forwarded by NGINX
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # --- Initialize Rate Limiter ---
 limiter = Limiter(
@@ -37,7 +41,7 @@ firmware_collection = db['firmware_versions']
 commands_collection = db['command_queue'] 
 users_collection = db['users'] 
 system_state = db['system_state'] 
-probe_tokens_collection = db['probe_tokens'] # NEW: Tracking individual agent tokens
+probe_tokens_collection = db['probe_tokens'] 
 
 # --- Admin Seeder ---
 if users_collection.count_documents({}) == 0:
@@ -59,11 +63,9 @@ def require_api_key(f):
     def decorated_function(*args, **kwargs):
         provided_key = request.headers.get("X-Api-Key")
         
-        # 1. Master Key Override (Required for the web dashboard UI javascript)
         if provided_key == API_KEY:
             return f(*args, **kwargs)
             
-        # 2. Dynamic Probe Token Validation (Checks DB for isolated agent tokens)
         if probe_tokens_collection.find_one({"token": provided_key, "status": "active"}):
             return f(*args, **kwargs)
             
@@ -348,11 +350,8 @@ def update_firmware():
 @login_required
 def download_probe():
     server_url = request.host_url.rstrip('/')
-    
-    # NEW: Generate a cryptographically secure token specifically for this agent
     unique_probe_token = f"sauron_pt_{secrets.token_hex(16)}"
     
-    # Store the token in the database so the bouncer knows it is legitimate
     probe_tokens_collection.insert_one({
         "token": unique_probe_token,
         "issued_by": session.get('user'),
@@ -360,7 +359,6 @@ def download_probe():
         "status": "active"
     })
     
-    # Inject the unique token instead of the master API key
     probe_code = f"""import requests
 import time
 
@@ -376,7 +374,7 @@ HEADERS = {{
 def update_c2_status(message):
     print(f"[*] {{message}}")
     try:
-        requests.post(f"{{C2_SERVER}}/api/probe/update_status", json={{"message": message}}, headers=HEADERS, verify=False)
+        requests.post(f"{{C2_SERVER}}/api/probe/update_status", json={{"message": message}}, headers=HEADERS)
     except Exception:
         pass
 
@@ -391,7 +389,7 @@ def execute_lan_scan():
     update_c2_status("Returning to stealth mode.")
     time.sleep(1)
     try:
-        requests.post(f"{{C2_SERVER}}/api/probe/stop_scan", headers=HEADERS, verify=False)
+        requests.post(f"{{C2_SERVER}}/api/probe/stop_scan", headers=HEADERS)
         print("[+] Scan finished. Awaiting next command.")
     except Exception:
         pass
@@ -401,7 +399,7 @@ def start_beacon():
     print(f"Targeting C2 Server: {{C2_SERVER}}")
     while True:
         try:
-            response = requests.get(f"{{C2_SERVER}}/api/probe/poll", headers=HEADERS, verify=False)
+            response = requests.get(f"{{C2_SERVER}}/api/probe/poll", headers=HEADERS)
             if response.status_code == 200 and response.json().get("command") == "scan_lan":
                 print("\\n[!] CRITICAL: LAN SCAN COMMAND RECEIVED FROM C2")
                 execute_lan_scan()
@@ -995,5 +993,6 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24, next_run_time=datetime.utcnow())
 scheduler.start()
 
+# We leave this here so you can test locally, but Gunicorn ignores it in production!
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, ssl_context='adhoc')
+    app.run(host='0.0.0.0', port=5005)
