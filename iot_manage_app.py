@@ -1,4 +1,6 @@
 import os
+import re
+import secrets
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 from pymongo import MongoClient
 from datetime import datetime
@@ -6,6 +8,8 @@ from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from apscheduler.schedulers.background import BackgroundScheduler
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # --- Load Secrets ---
 load_dotenv() 
@@ -15,6 +19,14 @@ API_KEY = os.getenv("SAURON_API_KEY", "fallback_key_if_missing")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_cookie_secret")
+
+# --- Initialize Rate Limiter ---
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 # --- MongoDB Setup ---
 client = MongoClient(MONGO_URI)
@@ -29,10 +41,16 @@ system_state = db['system_state']
 # --- Admin Seeder ---
 if users_collection.count_documents({}) == 0:
     print("Initializing default admin user...")
+    # Fetch from environment, or generate a cryptographically secure random password
+    admin_pass = os.getenv("SAURON_ADMIN_PWD", secrets.token_urlsafe(16))
     users_collection.insert_one({
         "username": "admin",
-        "password": generate_password_hash("Sauron2026!") 
+        "password": generate_password_hash(admin_pass) 
     })
+    print(f"\n[*] CRITICAL: Default admin provisioned.")
+    print(f"[*] USERNAME: admin")
+    print(f"[*] PASSWORD: {admin_pass}")
+    print("[*] SAVE THIS PASSWORD. It will not be displayed again.\n")
 
 
 # --- Security Bouncers ---
@@ -56,6 +74,7 @@ def login_required(f):
 
 # --- AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute") # Strict rate limit to prevent brute forcing
 def login():
     if 'user' in session:
         return redirect(url_for('homepage'))
@@ -318,11 +337,9 @@ def update_firmware():
 
 # --- SCAN MANAGEMENT ROUTES ---
 
-# NEW: Dynamic Payload Generator
 @app.route('/api/probe/download')
 @login_required
 def download_probe():
-    # We dynamically inject the server's current URL and the API key so the user doesn't have to edit the code
     server_url = request.host_url.rstrip('/')
     
     probe_code = f"""import requests
@@ -474,7 +491,6 @@ def homepage():
             </div>
         """
     else:
-        # VISUAL SHIFT: Trigger modal instead of direct scan
         scan_btn_html = """
             <a href="#provision-card" class="btn btn-cyber me-2" style="font-size: 0.8rem;">
                 <i class="bi bi-plus-lg me-2"></i> PROVISION DEVICE
@@ -877,7 +893,9 @@ def query_devices(device_name):
             return jsonify({"error": "Missing firmware_version parameter"}), 400
         return build_audit_html("#ff3366", '<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', "System Error", "Missing firmware_version parameter."), 400
 
-    fw_doc = firmware_collection.find_one({"model": {"$regex": f"^{clean_device_name}$", "$options": "i"}})
+    # Escape the input to neutralize regex injection attacks (ReDoS)
+    safe_device_name = re.escape(clean_device_name)
+    fw_doc = firmware_collection.find_one({"model": {"$regex": f"^{safe_device_name}$", "$options": "i"}})
 
     if fw_doc:
         true_baseline = fw_doc.get("latest_version")
@@ -957,4 +975,5 @@ scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24, 
 scheduler.start()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005)
+    # 'adhoc' generates a self-signed cert on the fly for secure TLS traffic.
+    app.run(host='0.0.0.0', port=5005, ssl_context='adhoc')
