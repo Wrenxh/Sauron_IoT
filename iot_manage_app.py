@@ -764,20 +764,23 @@ def query_devices(device_name):
         """
 
     if not firmware_version:
-        if is_machine: return jsonify({"error": "Missing firmware_version parameter"}), 400
+        if is_machine:
+            return jsonify({"error": "Missing firmware_version parameter"}), 400
         return build_audit_html("#ff3366", '<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', "System Error", "Missing firmware_version parameter."), 400
 
-    # NEW LOGIC: Query the global threat intel database using a case-insensitive regex search!
+    # Query the global threat intel database using a case-insensitive regex search!
     fw_doc = firmware_collection.find_one({"model": {"$regex": f"^{clean_device_name}$", "$options": "i"}})
 
     if fw_doc:
         true_baseline = fw_doc.get("latest_version")
         
         if true_baseline == firmware_version:
-            if is_machine: return jsonify({"status": "up_to_date", "current_version": true_baseline}), 200
+            if is_machine:
+                return jsonify({"status": "up_to_date", "current_version": true_baseline}), 200
             return build_audit_html("#00ff88", '<i class="bi bi-shield-fill-check" style="font-size: 4rem; color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.4);"></i>', "Integrity Verified", f"Target is running the latest authorized baseline (v{true_baseline})."), 200
         else:
-            if is_machine: return jsonify({"status": "update_required", "latest_version": true_baseline}), 200
+            if is_machine:
+                return jsonify({"status": "update_required", "latest_version": true_baseline}), 200
             
             # Fetch threat intel
             severity = fw_doc.get("severity", "WARNING")
@@ -791,10 +794,10 @@ def query_devices(device_name):
 
             return build_audit_html("#ff9d00", '<i class="bi bi-shield-fill-exclamation" style="font-size: 4rem; color: #ff9d00; text-shadow: 0 0 20px rgba(255,157,0,0.4);"></i>', "Vulnerability Detected", f"Reported version is v{firmware_version}, but the secure baseline is <b>v{true_baseline}</b>. Immediate patching advised.", threat_box), 200
 
-    if is_machine: return jsonify({"error": "Device not found."}), 404
+    if is_machine:
+        return jsonify({"error": "Device not found."}), 404
     return build_audit_html("#f8f9fa", '<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', "Unknown Target", "Target identity not found in the Sauron registry."), 404
-        
-    return build_audit_html("#f8f9fa", '<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', "Unknown Target", "Target identity not found in the Sauron registry."), 404
+          
 # --- AUTOMATED THREAT INTEL ENGINE ---
 def fetch_global_threat_intel():
     """
