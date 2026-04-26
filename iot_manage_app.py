@@ -847,7 +847,7 @@ def fetch_global_threat_intel():
         print(f"[SAURON INTEL] Error reaching threat feeds: {e}")
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24)
+scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24, next_run_time=datetime.utcnow())
 scheduler.start()
 
 if __name__ == '__main__':
