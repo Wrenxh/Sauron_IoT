@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify, session, redirect, url_for
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 from pymongo import MongoClient
 from datetime import datetime
 from functools import wraps
@@ -318,6 +318,70 @@ def update_firmware():
 
 # --- SCAN MANAGEMENT ROUTES ---
 
+# NEW: Dynamic Payload Generator
+@app.route('/api/probe/download')
+@login_required
+def download_probe():
+    # We dynamically inject the server's current URL and the API key so the user doesn't have to edit the code
+    server_url = request.host_url.rstrip('/')
+    
+    probe_code = f"""import requests
+import time
+
+# --- PROBE CONFIGURATION ---
+C2_SERVER = "{server_url}" 
+API_KEY = "{API_KEY}"
+
+HEADERS = {{
+    "Content-Type": "application/json",
+    "X-Api-Key": API_KEY
+}}
+
+def update_c2_status(message):
+    print(f"[*] {{message}}")
+    try:
+        requests.post(f"{{C2_SERVER}}/api/probe/update_status", json={{"message": message}}, headers=HEADERS)
+    except Exception:
+        pass
+
+def execute_lan_scan():
+    update_c2_status("Initializing rapid subnet sweep (192.168.1.0/24)...")
+    time.sleep(2)
+    for i in range(1, 20):
+        update_c2_status(f"Pinging 192.168.1.{{i}}...")
+        time.sleep(0.4)
+    update_c2_status("Sweep complete. Correlating MAC addresses...")
+    time.sleep(2)
+    update_c2_status("Returning to stealth mode.")
+    time.sleep(1)
+    try:
+        requests.post(f"{{C2_SERVER}}/api/probe/stop_scan", headers=HEADERS)
+        print("[+] Scan finished. Awaiting next command.")
+    except Exception:
+        pass
+
+def start_beacon():
+    print("=== SAURON PROBE ONLINE ===")
+    print(f"Targeting C2 Server: {{C2_SERVER}}")
+    while True:
+        try:
+            response = requests.get(f"{{C2_SERVER}}/api/probe/poll", headers=HEADERS)
+            if response.status_code == 200 and response.json().get("command") == "scan_lan":
+                print("\\n[!] CRITICAL: LAN SCAN COMMAND RECEIVED FROM C2")
+                execute_lan_scan()
+        except Exception:
+            print("[-] C2 Server unreachable. Retrying in 5 seconds...")
+        time.sleep(3) 
+
+if __name__ == "__main__":
+    start_beacon()
+"""
+    return app.response_class(
+        probe_code,
+        mimetype='text/x-python',
+        headers={'Content-Disposition': 'attachment;filename=sauron_probe.py'}
+    )
+
 @app.route('/api/probe/trigger_scan', methods=['POST'])
 @require_api_key
 def trigger_scan():
@@ -410,12 +474,12 @@ def homepage():
             </div>
         """
     else:
-        # VISUAL SHIFT: Navbar prioritizes adding devices
+        # VISUAL SHIFT: Trigger modal instead of direct scan
         scan_btn_html = """
             <a href="#provision-card" class="btn btn-cyber me-2" style="font-size: 0.8rem;">
                 <i class="bi bi-plus-lg me-2"></i> PROVISION DEVICE
             </a>
-            <button class="btn btn-cyber-outline me-3" onclick="triggerLanScan()" title="Requires Local Agent" style="padding: 10px 15px;">
+            <button class="btn btn-cyber-outline me-3" data-bs-toggle="modal" data-bs-target="#lanScanModal" title="Requires Local Agent" style="padding: 10px 15px;">
                 <i class="bi bi-radar"></i>
             </button>
         """
@@ -530,7 +594,6 @@ def homepage():
     """
 
     if not all_devices:
-        # VISUAL SHIFT: Empty State heavily drives manual provisioning
         html_page += """
                             <tr>
                                 <td colspan="6" class="text-center py-5">
@@ -542,7 +605,7 @@ def homepage():
                                         <a href="#provision-card" class="btn btn-cyber px-5 py-2" style="font-size: 0.9rem;">
                                             <i class="bi bi-terminal me-2"></i> MANUALLY PROVISION ENDPOINT
                                         </a>
-                                        <button class="btn btn-link text-muted text-decoration-none" onclick="triggerLanScan()" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                                        <button class="btn btn-link text-muted text-decoration-none" data-bs-toggle="modal" data-bs-target="#lanScanModal" style="font-size: 0.75rem; letter-spacing: 0.5px;">
                                             <i class="bi bi-radar me-1"></i> Run Advanced LAN Scan (Requires Local Agent)
                                         </button>
                                     </div>
@@ -647,6 +710,38 @@ def homepage():
                 </div>
             </div>
         </div>
+
+        <div class="modal fade" id="lanScanModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="background-color: #14122b; border: 1px solid #ff3366; box-shadow: 0 0 30px rgba(255, 51, 102, 0.2);">
+                    <div class="modal-header" style="border-bottom: 1px solid #2b2757;">
+                        <h5 class="modal-title fw-bold" style="color: #ff3366; letter-spacing: 1px;"><i class="bi bi-exclamation-triangle-fill me-2"></i> SECURITY CLEARANCE REQUIRED</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <p style="color: #f8f9fa;">You are requesting the deployment of the <strong>Sauron C2 Agent</strong> to your local machine.</p>
+                        
+                        <div class="p-3 mb-4 rounded" style="background-color: rgba(255, 51, 102, 0.1); border: 1px solid rgba(255, 51, 102, 0.3);">
+                            <p class="mb-0 fw-bold" style="font-size: 0.85rem; color: #ff3366;">
+                                <i class="bi bi-shield-x me-2"></i>WARNING: Run this script ONLY on a network you own or have explicit authorization to audit. Do not leave the agent running indefinitely. Immediately delete `sauron_probe.py` once your reconnaissance is complete.
+                            </p>
+                        </div>
+                        
+                        <ol style="color: #aeb2b8; font-size: 0.9rem;">
+                            <li class="mb-2">Download the Python agent below.</li>
+                            <li class="mb-2">Run the script in your local terminal: <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python3 sauron_probe.py</code></li>
+                            <li>Once the agent says "ONLINE", click "Initiate Target Scan".</li>
+                        </ol>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid #2b2757;">
+                        <a href="/api/probe/download" class="btn btn-cyber-outline me-auto" style="border-color: #aeb2b8; color: #aeb2b8;"><i class="bi bi-download me-2"></i> 1. DOWNLOAD AGENT</a>
+                        <button type="button" class="btn btn-danger" onclick="triggerLanScan()" style="box-shadow: 0 0 15px rgba(255, 51, 102, 0.4);"><i class="bi bi-radar me-2"></i> 2. INITIATE SCAN</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
         
         <script>
             const API_HEADERS = {{ 
