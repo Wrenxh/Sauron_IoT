@@ -754,7 +754,7 @@ def query_devices(device_name):
             <div class="card p-5 text-center">
                 <div class="mb-4">{icon}</div>
                 <h2 class="fw-bold mb-3" style="color: {text_color}; text-transform: uppercase; letter-spacing: 2px;">{title}</h2>
-                <div class="terminal-box fw-bold text-secondary">{clean_device_name}</div>
+                <div class="terminal-box fw-bold text-secondary">{clean_device_name.upper()}</div>
                 <p class="mb-4 fs-6" style="color: #aeb2b8;">{message}</p>
                 {threat_box}
                 <a href="/" class="btn-cyber w-100 text-decoration-none d-block mt-4"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
@@ -764,39 +764,35 @@ def query_devices(device_name):
         """
 
     if not firmware_version:
-        if is_machine: 
-            return jsonify({"error": "Missing firmware_version parameter"}), 400
+        if is_machine: return jsonify({"error": "Missing firmware_version parameter"}), 400
         return build_audit_html("#ff3366", '<i class="bi bi-x-hexagon-fill" style="font-size: 4rem; color: #ff3366;"></i>', "System Error", "Missing firmware_version parameter."), 400
 
-    device_doc = devices_collection.find_one({"device_name": clean_device_name})
+    # NEW LOGIC: Query the global threat intel database using a case-insensitive regex search!
+    fw_doc = firmware_collection.find_one({"model": {"$regex": f"^{clean_device_name}$", "$options": "i"}})
 
-    if device_doc:
-        current_version = device_doc.get("version")
-        if current_version == firmware_version:
-            if is_machine: 
-                return jsonify({"status": "up_to_date", "current_version": current_version}), 200
-            return build_audit_html("#00ff88", '<i class="bi bi-shield-fill-check" style="font-size: 4rem; color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.4);"></i>', "Integrity Verified", f"Target is running the latest authorized baseline (v{current_version})."), 200
+    if fw_doc:
+        true_baseline = fw_doc.get("latest_version")
+        
+        if true_baseline == firmware_version:
+            if is_machine: return jsonify({"status": "up_to_date", "current_version": true_baseline}), 200
+            return build_audit_html("#00ff88", '<i class="bi bi-shield-fill-check" style="font-size: 4rem; color: #00ff88; text-shadow: 0 0 20px rgba(0,255,136,0.4);"></i>', "Integrity Verified", f"Target is running the latest authorized baseline (v{true_baseline})."), 200
         else:
-            if is_machine: 
-                return jsonify({"status": "update_required", "latest_version": current_version}), 200
+            if is_machine: return jsonify({"status": "update_required", "latest_version": true_baseline}), 200
             
-            # Fetch threat intel to display on the vulnerability screen
-            fw_doc = firmware_collection.find_one({"model": clean_device_name})
-            threat_box = ""
-            if fw_doc and "release_notes" in fw_doc:
-                severity = fw_doc.get("severity", "WARNING")
-                notes = fw_doc.get("release_notes")
-                threat_box = f"""
-                <div class="alert text-start p-3" style="background-color: rgba(255, 51, 102, 0.05); border: 1px solid rgba(255, 51, 102, 0.3); border-radius: 4px;">
-                    <div style="color: #ff3366; font-size: 0.75rem; font-weight: 800; letter-spacing: 1px; margin-bottom: 5px;"><i class="bi bi-bug-fill me-1"></i> THREAT INTEL: SEVERITY {severity}</div>
-                    <div style="color: #f8f9fa; font-size: 0.85rem; font-family: 'Roboto Mono', monospace;">{notes}</div>
-                </div>
-                """
+            # Fetch threat intel
+            severity = fw_doc.get("severity", "WARNING")
+            notes = fw_doc.get("release_notes", "No additional context available.")
+            threat_box = f"""
+            <div class="alert text-start p-3" style="background-color: rgba(255, 51, 102, 0.05); border: 1px solid rgba(255, 51, 102, 0.3); border-radius: 4px;">
+                <div style="color: #ff3366; font-size: 0.75rem; font-weight: 800; letter-spacing: 1px; margin-bottom: 5px;"><i class="bi bi-bug-fill me-1"></i> THREAT INTEL: SEVERITY {severity}</div>
+                <div style="color: #f8f9fa; font-size: 0.85rem; font-family: 'Roboto Mono', monospace;">{notes}</div>
+            </div>
+            """
 
-            return build_audit_html("#ff9d00", '<i class="bi bi-shield-fill-exclamation" style="font-size: 4rem; color: #ff9d00; text-shadow: 0 0 20px rgba(255,157,0,0.4);"></i>', "Vulnerability Detected", f"Reported version is v{firmware_version}, but the secure baseline is <b>v{current_version}</b>. Immediate patching advised.", threat_box), 200
+            return build_audit_html("#ff9d00", '<i class="bi bi-shield-fill-exclamation" style="font-size: 4rem; color: #ff9d00; text-shadow: 0 0 20px rgba(255,157,0,0.4);"></i>', "Vulnerability Detected", f"Reported version is v{firmware_version}, but the secure baseline is <b>v{true_baseline}</b>. Immediate patching advised.", threat_box), 200
 
-    if is_machine: 
-        return jsonify({"error": "Device not found."}), 404
+    if is_machine: return jsonify({"error": "Device not found."}), 404
+    return build_audit_html("#f8f9fa", '<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', "Unknown Target", "Target identity not found in the Sauron registry."), 404
         
     return build_audit_html("#f8f9fa", '<i class="bi bi-question-square" style="font-size: 4rem; color: #2b2757;"></i>', "Unknown Target", "Target identity not found in the Sauron registry."), 404
 # --- AUTOMATED THREAT INTEL ENGINE ---
