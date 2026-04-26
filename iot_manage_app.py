@@ -1,7 +1,7 @@
 import os
 import re
 import secrets
-from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
+from flask import Flask, request, jsonify, session, redirect, url_for
 from pymongo import MongoClient
 from datetime import datetime
 from functools import wraps
@@ -47,8 +47,8 @@ if users_collection.count_documents({}) == 0:
         "username": "admin",
         "password": generate_password_hash(admin_pass) 
     })
-    print(f"\n[*] CRITICAL: Default admin provisioned.")
-    print(f"[*] USERNAME: admin")
+    print("\n[*] CRITICAL: Default admin provisioned.")
+    print("[*] USERNAME: admin")
     print(f"[*] PASSWORD: {admin_pass}")
     print("[*] SAVE THIS PASSWORD. It will not be displayed again.\n")
 
