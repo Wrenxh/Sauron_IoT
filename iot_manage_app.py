@@ -87,7 +87,7 @@ def landing_page():
     if 'user' in session:
         return redirect(url_for('dashboard'))
         
-    html_page = f"""
+    html_page = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -96,27 +96,27 @@ def landing_page():
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
         <style>
-            :root {{
+            :root {
                 --bg-void: #090814;
                 --surface: #14122b;
                 --primary-purple: #9d4edd;
                 --glow-purple: 0 0 30px rgba(157, 78, 221, 0.4);
                 --text-muted: #8b87a8;
-            }}
-            body {{ 
+            }
+            body { 
                 background-color: var(--bg-void); 
                 color: #f8f9fa; 
                 font-family: 'Inter', sans-serif; 
                 overflow-x: hidden;
                 background-image: radial-gradient(circle at top right, rgba(157, 78, 221, 0.15), transparent 50%),
                                   radial-gradient(circle at bottom left, rgba(157, 78, 221, 0.05), transparent 40%);
-            }}
-            .navbar {{ padding: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px); }}
-            .hero-section {{ padding: 100px 0 60px; text-align: center; }}
-            .hero-title {{ font-size: 4rem; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 20px; text-transform: uppercase; }}
-            .hero-subtitle {{ color: var(--text-muted); font-size: 1.15rem; max-width: 650px; margin: 0 auto 40px; line-height: 1.6; }}
+            }
+            .navbar { padding: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px); }
+            .hero-section { padding: 100px 0 60px; text-align: center; }
+            .hero-title { font-size: 4rem; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 20px; text-transform: uppercase; }
+            .hero-subtitle { color: var(--text-muted); font-size: 1.15rem; max-width: 650px; margin: 0 auto 40px; line-height: 1.6; }
             
-            .feature-card {{ 
+            .feature-card { 
                 background: rgba(20, 18, 43, 0.6); 
                 border: 1px solid #2b2757; 
                 border-radius: 12px; 
@@ -124,11 +124,11 @@ def landing_page():
                 transition: 0.3s;
                 height: 100%;
                 backdrop-filter: blur(10px);
-            }}
-            .feature-card:hover {{ transform: translateY(-10px); border-color: var(--primary-purple); box-shadow: var(--glow-purple); }}
-            .feature-icon {{ color: var(--primary-purple); font-size: 2.5rem; margin-bottom: 20px; display: block; }}
+            }
+            .feature-card:hover { transform: translateY(-10px); border-color: var(--primary-purple); box-shadow: var(--glow-purple); }
+            .feature-icon { color: var(--primary-purple); font-size: 2.5rem; margin-bottom: 20px; display: block; }
             
-            .btn-cyber {{ 
+            .btn-cyber { 
                 background-color: var(--primary-purple); 
                 color: white; 
                 font-weight: 800; 
@@ -140,12 +140,12 @@ def landing_page():
                 transition: 0.3s;
                 text-decoration: none;
                 display: inline-block;
-            }}
-            .btn-cyber:hover {{ background-color: #b166eb; color: white; transform: scale(1.05); }}
-            .btn-cyber-outline {{ background: transparent; border: 1px solid var(--primary-purple); color: var(--primary-purple); padding: 10px 25px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; text-decoration: none; transition: 0.3s; text-transform: uppercase; }}
-            .btn-cyber-outline:hover {{ background: var(--primary-purple); color: white; box-shadow: var(--glow-purple); }}
+            }
+            .btn-cyber:hover { background-color: #b166eb; color: white; transform: scale(1.05); }
+            .btn-cyber-outline { background: transparent; border: 1px solid var(--primary-purple); color: var(--primary-purple); padding: 10px 25px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; text-decoration: none; transition: 0.3s; text-transform: uppercase; }
+            .btn-cyber-outline:hover { background: var(--primary-purple); color: white; box-shadow: var(--glow-purple); }
             
-            .impact-section {{ background-color: rgba(0,0,0,0.4); border-top: 1px solid #2b2757; border-bottom: 1px solid #2b2757; padding: 80px 0; margin-top: 60px; }}
+            .impact-section { background-color: rgba(0,0,0,0.4); border-top: 1px solid #2b2757; border-bottom: 1px solid #2b2757; padding: 80px 0; margin-top: 60px; }
         </style>
     </head>
     <body>
