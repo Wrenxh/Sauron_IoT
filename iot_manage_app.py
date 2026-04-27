@@ -81,12 +81,143 @@ def login_required(f):
     return decorated_function
 
 
+# --- NEW: LANDING PAGE ROUTE ---
+@app.route('/')
+def landing_page():
+    if 'user' in session:
+        return redirect(url_for('dashboard'))
+        
+    html_page = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <title>Sauron Hub | Secure Your Smart Home</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+        <style>
+            :root {{
+                --bg-void: #090814;
+                --surface: #14122b;
+                --primary-purple: #9d4edd;
+                --glow-purple: 0 0 30px rgba(157, 78, 221, 0.4);
+                --text-muted: #8b87a8;
+            }}
+            body {{ 
+                background-color: var(--bg-void); 
+                color: #f8f9fa; 
+                font-family: 'Inter', sans-serif; 
+                overflow-x: hidden;
+                background-image: radial-gradient(circle at top right, rgba(157, 78, 221, 0.15), transparent 50%),
+                                  radial-gradient(circle at bottom left, rgba(157, 78, 221, 0.05), transparent 40%);
+            }}
+            .navbar {{ padding: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px); }}
+            .hero-section {{ padding: 100px 0 60px; text-align: center; }}
+            .hero-title {{ font-size: 4rem; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 20px; text-transform: uppercase; }}
+            .hero-subtitle {{ color: var(--text-muted); font-size: 1.15rem; max-width: 650px; margin: 0 auto 40px; line-height: 1.6; }}
+            
+            .feature-card {{ 
+                background: rgba(20, 18, 43, 0.6); 
+                border: 1px solid #2b2757; 
+                border-radius: 12px; 
+                padding: 40px; 
+                transition: 0.3s;
+                height: 100%;
+                backdrop-filter: blur(10px);
+            }}
+            .feature-card:hover {{ transform: translateY(-10px); border-color: var(--primary-purple); box-shadow: var(--glow-purple); }}
+            .feature-icon {{ color: var(--primary-purple); font-size: 2.5rem; margin-bottom: 20px; display: block; }}
+            
+            .btn-cyber {{ 
+                background-color: var(--primary-purple); 
+                color: white; 
+                font-weight: 800; 
+                padding: 15px 40px; 
+                border-radius: 4px; 
+                text-transform: uppercase; 
+                letter-spacing: 2px;
+                box-shadow: var(--glow-purple);
+                transition: 0.3s;
+                text-decoration: none;
+                display: inline-block;
+            }}
+            .btn-cyber:hover {{ background-color: #b166eb; color: white; transform: scale(1.05); }}
+            .btn-cyber-outline {{ background: transparent; border: 1px solid var(--primary-purple); color: var(--primary-purple); padding: 10px 25px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; text-decoration: none; transition: 0.3s; text-transform: uppercase; }}
+            .btn-cyber-outline:hover {{ background: var(--primary-purple); color: white; box-shadow: var(--glow-purple); }}
+            
+            .impact-section {{ background-color: rgba(0,0,0,0.4); border-top: 1px solid #2b2757; border-bottom: 1px solid #2b2757; padding: 80px 0; margin-top: 60px; }}
+        </style>
+    </head>
+    <body>
+        <nav class="navbar sticky-top">
+            <div class="container d-flex justify-content-between align-items-center">
+                <span class="fw-bold" style="font-size: 1.2rem; letter-spacing: 1px;"><i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple);"></i>SAURON HUB</span>
+                <div>
+                    <a href="/login" class="btn-cyber-outline me-3">Login</a>
+                    <a href="/register" class="text-white text-decoration-none fw-bold" style="font-size: 0.9rem;">Sign Up &rarr;</a>
+                </div>
+            </div>
+        </nav>
+
+        <section class="hero-section container">
+            <h1 class="hero-title">Total Visibility. <br><span style="color: var(--primary-purple);">Unmatched Privacy.</span></h1>
+            <p class="hero-subtitle">Your smart home shouldn't be a black box. Sauron Hub is an enterprise-grade IoT management platform built to monitor the health, verify the integrity, and secure the data of your everyday devices.</p>
+            <a href="/register" class="btn-cyber">Establish Security</a>
+        </section>
+
+        <section class="impact-section">
+            <div class="container">
+                <div class="row align-items-center g-5">
+                    <div class="col-lg-6">
+                        <h2 class="fw-bold mb-4" style="color: white; letter-spacing: -1px;">Protecting Your Day-to-Day.</h2>
+                        <div class="d-flex mb-4">
+                            <i class="bi bi-shield-lock-fill fs-3 me-3" style="color: var(--primary-purple);"></i>
+                            <div>
+                                <h5 class="fw-bold mb-1">Peace of Mind</h5>
+                                <p class="text-muted small mb-0">Know exactly what firmware your interior cameras and smart locks are running, ensuring zero-day exploits can't compromise your privacy.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex mb-4">
+                            <i class="bi bi-activity fs-3 me-3" style="color: var(--primary-purple);"></i>
+                            <div>
+                                <h5 class="fw-bold mb-1">Automated Defense</h5>
+                                <p class="text-muted small mb-0">Stop checking forums for vulnerabilities. Our global threat intelligence engine automatically flags devices that require critical OTA patches.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex">
+                            <i class="bi bi-wifi-off fs-3 me-3" style="color: var(--primary-purple);"></i>
+                            <div>
+                                <h5 class="fw-bold mb-1">Network Hygiene</h5>
+                                <p class="text-muted small mb-0">Deploy local reconnaissance agents to sweep your subnet, instantly identifying rogue hardware hogging bandwidth or sniffing your traffic.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card p-4 border-secondary" style="background: rgba(20, 18, 43, 0.4);">
+                            <div class="terminal-box" style="font-family: 'Roboto Mono', monospace; font-size: 0.85rem; color: #00ff88; line-height: 1.8;">
+                                > INITIALIZING SUBNET SWEEP...<br>
+                                > PINGING 192.168.1.0/24...<br>
+                                > 3 DEVICES DETECTED.<br>
+                                <span class="text-danger">> WARNING: 1 DEVICE FIRMWARE OUTDATED.</span><br>
+                                > DEPLOYING PATCH PROTOCOL...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </body>
+    </html>
+    """
+    return html_page
+
+
 # --- AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute") 
 def login():
     if 'user' in session:
-        return redirect(url_for('homepage'))
+        return redirect(url_for('dashboard'))
 
     error_msg = ""
     
@@ -98,7 +229,7 @@ def login():
         
         if user_record and check_password_hash(user_record['password'], password):
             session['user'] = username 
-            return redirect(url_for('homepage'))
+            return redirect(url_for('dashboard'))
         else:
             error_msg = '<div class="alert alert-danger" style="background-color: rgba(255, 51, 102, 0.1); border: 1px solid #ff3366; color: #ff3366; padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 20px;">ACCESS DENIED: Invalid Credentials</div>'
 
@@ -154,6 +285,9 @@ def login():
             <div class="text-center border-top border-secondary pt-3 mt-2">
                 <a href="/register" class="cyber-link">CREATE ACCOUNT &rarr;</a>
             </div>
+            <div class="text-center mt-3">
+                <a href="/" class="text-muted text-decoration-none small">&larr; Back to Home</a>
+            </div>
         </div>
     </body>
     </html>
@@ -163,7 +297,7 @@ def login():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if 'user' in session:
-        return redirect(url_for('homepage'))
+        return redirect(url_for('dashboard'))
 
     error_msg = ""
     
@@ -179,7 +313,7 @@ def register():
                 "password": generate_password_hash(password)
             })
             session['user'] = username 
-            return redirect(url_for('homepage'))
+            return redirect(url_for('dashboard'))
 
     html_page = f"""
     <!DOCTYPE html>
@@ -233,6 +367,9 @@ def register():
             <div class="text-center border-top border-secondary pt-3 mt-2">
                 <a href="/login" class="cyber-link">&larr; RETURN TO LOGIN</a>
             </div>
+            <div class="text-center mt-3">
+                <a href="/" class="text-muted text-decoration-none small">&larr; Back to Home</a>
+            </div>
         </div>
     </body>
     </html>
@@ -242,7 +379,7 @@ def register():
 @app.route('/logout')
 def logout():
     session.pop('user', None)
-    return redirect(url_for('login'))
+    return redirect(url_for('landing_page'))
 
 
 # --- API Routes (Machine-facing, protected by API Key) ---
@@ -483,9 +620,9 @@ def get_probe_status():
 
 # --- Dashboard Routes (Human-facing, protected by Session) ---
 
-@app.route('/')
+@app.route('/dashboard')
 @login_required  
-def homepage():
+def dashboard():
     operator_name = session.get('user', 'Operator').upper()
     
     all_devices = list(devices_collection.find({"owner": session.get('user')}).sort("last_seen", -1))
@@ -591,7 +728,7 @@ def homepage():
     <body>
         <nav class="navbar navbar-expand-lg mb-5 sticky-top">
             <div class="container-fluid px-5">
-                <a class="navbar-brand d-flex align-items-center" href="#">
+                <a class="navbar-brand d-flex align-items-center" href="/">
                     <i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple); text-shadow: var(--glow-purple);"></i>
                     SAURON PLATFORM
                 </a>
@@ -902,7 +1039,7 @@ def query_devices(device_name):
                 <div class="terminal-box fw-bold text-secondary">{clean_device_name.upper()}</div>
                 <p class="mb-4 fs-6" style="color: #aeb2b8;">{message}</p>
                 {threat_box}
-                <a href="/" class="btn-cyber w-100 text-decoration-none d-block mt-4"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
+                <a href="/dashboard" class="btn-cyber w-100 text-decoration-none d-block mt-4"><i class="bi bi-arrow-left me-2"></i>Return to Platform</a>
             </div>
         </body>
         </html>
