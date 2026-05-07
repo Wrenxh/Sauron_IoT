@@ -450,6 +450,36 @@ def add_device():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# NEW: Edit Device Route
+@app.route('/api/device/edit', methods=['POST'])
+@require_api_key
+def edit_device():
+    data = request.get_json()
+    old_name = data.get("old_name")
+    new_name = data.get("new_name", "").strip()
+    new_version = data.get("new_version", "").strip()
+    owner = session.get('user')
+
+    if not owner or not old_name or not new_name:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        # Check if they are renaming it to something that already exists
+        if old_name != new_name and devices_collection.find_one({"device_name": new_name, "owner": owner}):
+            return jsonify({"error": "A device with that new name already exists."}), 409
+
+        devices_collection.update_one(
+            {"device_name": old_name, "owner": owner},
+            {"$set": {
+                "device_name": new_name, 
+                "version": new_version if new_version else "Unknown"
+            }}
+        )
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/device/remove', methods=['POST'])
 @require_api_key
 def remove_device():
@@ -489,7 +519,7 @@ def update_firmware():
         return jsonify({"error": str(e)}), 500
 
 
-# --- SCAN MANAGEMENT ROUTES (UPDATED WITH TERMINATION) ---
+# --- SCAN MANAGEMENT ROUTES ---
 
 @app.route('/api/probe/download')
 @login_required
@@ -642,7 +672,7 @@ def start_beacon():
                     print("\\n[!] CRITICAL: LAN SCAN COMMAND RECEIVED FROM C2")
                     scan_lan()
                     print("[*] Self-terminating as requested.")
-                    break # <--- SELF-TERMINATES THE AGENT HERE
+                    break 
             elif response.status_code == 401:
                 print("[-] CRITICAL ERROR: Access Token Revoked or Invalid. Terminating.")
                 break
@@ -826,7 +856,7 @@ def dashboard():
             
             .btn-cyber {{ background-color: var(--primary-purple); color: white; border: none; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 0.8rem; border-radius: 4px; padding: 10px 20px; box-shadow: var(--glow-purple); transition: all 0.3s ease; }}
             .btn-cyber:hover {{ background-color: #b166eb; color: white; box-shadow: 0 0 30px rgba(157, 78, 221, 0.6); transform: translateY(-1px); }}
-            .btn-cyber-outline {{ background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; text-decoration: none; display: inline-block; padding: 10px 20px; border-radius: 4px;}}
+            .btn-cyber-outline {{ background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; text-decoration: none; display: inline-block; padding: 5px 10px; border-radius: 4px;}}
             .btn-cyber-outline:hover {{ background-color: rgba(255,255,255,0.05); color: white; border-color: var(--text-muted); }}
             
             .form-control {{ background-color: rgba(0,0,0,0.3) !important; border: 1px solid var(--border-color) !important; color: white !important; border-radius: 4px; padding: 12px; font-family: 'Roboto Mono', monospace; font-size: 0.9rem; }}
@@ -848,7 +878,7 @@ def dashboard():
                         <i class="bi bi-person-bounding-box me-2" style="color: #9d4edd;"></i>USER: <span class="text-white">{operator_name}</span>
                     </span>
                     {scan_btn_html}
-                    <a href="/logout" class="btn btn-cyber-outline"><i class="bi bi-box-arrow-right me-1"></i> DISCONNECT</a>
+                    <a href="/logout" class="btn btn-cyber-outline" style="padding: 10px 20px;"><i class="bi bi-box-arrow-right me-1"></i> DISCONNECT</a>
                 </div>
             </div>
         </nav>
@@ -920,7 +950,9 @@ def dashboard():
                 fw_display = f'<span style="color: var(--danger-red); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-exclamation me-1"></i> VULNERABLE</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">({current_version} &rarr; {target_version})</span>'
                 ota_button = f'<button class="btn btn-sm btn-cyber me-2" style="padding: 5px 10px; font-size: 0.7rem;" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Push Update">PATCH OTA</button>'
 
-            delete_button = f'<button class="btn btn-sm btn-cyber-outline" style="padding: 5px 10px;" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3"></i></button>'
+            # NEW: Edit Button
+            edit_button = f'<button class="btn btn-sm btn-cyber-outline me-2" onclick="openEditModal(\'{name}\', \'{current_version}\')" title="Edit Device"><i class="bi bi-pencil"></i></button>'
+            delete_button = f'<button class="btn btn-sm btn-cyber-outline" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3"></i></button>'
 
             telemetry = f'<span class="me-3" style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-lightning-charge-fill text-muted me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
             telemetry += f'<span style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-thermometer-half text-muted me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
@@ -934,6 +966,7 @@ def dashboard():
                                     <td style="font-family: 'Roboto Mono', monospace; font-size: 0.85rem; color: var(--text-muted);">{last_seen}</td>
                                     <td class="text-end pe-4">
                                         {ota_button}
+                                        {edit_button}
                                         {delete_button}
                                     </td>
                                 </tr>
@@ -967,7 +1000,7 @@ def dashboard():
                                     </p>
                                 </div>
 
-                                <button type="submit" class="btn btn-cyber-outline w-100 py-2">REGISTER TO HUB</button>
+                                <button type="submit" class="btn btn-cyber-outline w-100 py-2" style="padding: 10px 20px;">REGISTER TO HUB</button>
                             </form>
                         </div>
                     </div>
@@ -989,7 +1022,7 @@ def dashboard():
                                     <label for="firmware_version" class="form-label">REPORTED VERSION</label>
                                     <input type="text" class="form-control" id="firmware_version" required placeholder="e.g. 1.71">
                                 </div>
-                                <button type="submit" class="btn btn-cyber-outline w-100 py-2">EXECUTE AUDIT</button>
+                                <button type="submit" class="btn btn-cyber-outline w-100 py-2" style="padding: 10px 20px;">EXECUTE AUDIT</button>
                             </form>
                         </div>
                     </div>
@@ -1025,8 +1058,33 @@ def dashboard():
                         </ol>
                     </div>
                     <div class="modal-footer" style="border-top: 1px solid #2b2757;">
-                        <a href="/api/probe/download" class="btn btn-cyber-outline me-auto" style="border-color: #aeb2b8; color: #aeb2b8;"><i class="bi bi-download me-2"></i> 1. DOWNLOAD AGENT</a>
+                        <a href="/api/probe/download" class="btn btn-cyber-outline me-auto" style="border-color: #aeb2b8; color: #aeb2b8; padding: 10px 20px;"><i class="bi bi-download me-2"></i> 1. DOWNLOAD AGENT</a>
                         <button type="button" class="btn btn-danger" onclick="triggerLanScan()" style="box-shadow: 0 0 15px rgba(255, 51, 102, 0.4);"><i class="bi bi-radar me-2"></i> 2. INITIATE SCAN</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="editDeviceModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="background-color: #14122b; border: 1px solid #2b2757;">
+                    <div class="modal-header" style="border-bottom: 1px solid #2b2757;">
+                        <h5 class="modal-title fw-bold" style="color: #f8f9fa;"><i class="bi bi-pencil-square me-2" style="color: var(--primary-purple);"></i> EDIT ENDPOINT</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <form id="editDeviceForm">
+                            <input type="hidden" id="edit_old_name">
+                            <div class="mb-3">
+                                <label class="form-label text-muted small">ENDPOINT ALIAS</label>
+                                <input type="text" class="form-control" id="edit_new_name" required>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label text-muted small">FIRMWARE VERSION</label>
+                                <input type="text" class="form-control" id="edit_new_version" required>
+                            </div>
+                            <button type="submit" class="btn btn-cyber w-100" style="padding: 10px 20px;">SAVE CHANGES</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -1081,6 +1139,33 @@ def dashboard():
                 .then(data => {{
                     if(data.status === 'success') window.location.reload(); 
                     else alert("Provisioning Error: " + data.error);
+                }});
+            }});
+
+            // NEW: Javascript to handle the Edit Modal and Backend Request
+            function openEditModal(name, version) {{
+                document.getElementById('edit_old_name').value = name;
+                document.getElementById('edit_new_name').value = name;
+                document.getElementById('edit_new_version').value = version === 'Unknown' ? '' : version;
+                var myModal = new bootstrap.Modal(document.getElementById('editDeviceModal'));
+                myModal.show();
+            }}
+
+            document.getElementById('editDeviceForm').addEventListener('submit', function(e) {{
+                e.preventDefault();
+                fetch('/api/device/edit', {{
+                    method: 'POST',
+                    headers: API_HEADERS,
+                    body: JSON.stringify({{
+                        old_name: document.getElementById('edit_old_name').value,
+                        new_name: document.getElementById('edit_new_name').value,
+                        new_version: document.getElementById('edit_new_version').value
+                    }})
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    if(data.status === 'success') window.location.reload();
+                    else alert("Edit Error: " + data.error);
                 }});
             }});
 
