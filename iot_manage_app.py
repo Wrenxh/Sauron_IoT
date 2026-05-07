@@ -418,12 +418,25 @@ def add_device():
     data = request.get_json()
     device_name = data.get("device_name", "").strip()
     version = data.get("version", "").strip()
+    
+    # 1. Try to get the owner from the browser session
     owner = session.get('user')
     
+    # 2. If no session (like our Python probe), get the owner from the API Token!
     if not owner:
-        return jsonify({"error": "You must be logged in."}), 403
+        provided_key = request.headers.get("X-Api-Key")
+        token_doc = probe_tokens_collection.find_one({"token": provided_key, "status": "active"})
+        if token_doc:
+            owner = token_doc.get("issued_by")
+        elif provided_key == API_KEY:
+            owner = "admin" # Fallback if using the master key
+            
+    if not owner:
+        return jsonify({"error": "You must be logged in or provide a valid token."}), 403
+        
     if not device_name:
         return jsonify({"error": "Device name cannot be empty."}), 400
+        
     if devices_collection.find_one({"device_name": device_name, "owner": owner}):
         return jsonify({"error": "You already have a device with this name."}), 409
 
@@ -432,9 +445,10 @@ def add_device():
             "device_name": device_name,
             "owner": owner, 
             "version": version if version else "Unknown",
-            "status": "offline", 
+            "status": "online", # Set to online since the probe just saw it!
             "battery": "N/A", 
-            "temperature": "N/A"
+            "temperature": "N/A",
+            "last_seen": datetime.utcnow()
         })
         if not firmware_collection.find_one({"model": device_name}):
             firmware_collection.insert_one({"model": device_name, "latest_version": version if version else "1.0.0"})
