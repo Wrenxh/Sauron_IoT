@@ -7,7 +7,7 @@ from datetime import datetime
 from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.middleware.proxy_fix import ProxyFix  # NEW: Handles NGINX IP routing
+from werkzeug.middleware.proxy_fix import ProxyFix
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -21,7 +21,6 @@ API_KEY = os.getenv("SAURON_API_KEY", "fallback_key_if_missing")
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_cookie_secret")
 
-# NEW: Tell Flask to trust the real IPs forwarded by NGINX
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # --- Initialize Rate Limiter ---
@@ -62,13 +61,10 @@ def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         provided_key = request.headers.get("X-Api-Key")
-        
         if provided_key == API_KEY:
             return f(*args, **kwargs)
-            
         if probe_tokens_collection.find_one({"token": provided_key, "status": "active"}):
             return f(*args, **kwargs)
-            
         return jsonify({"error": "Unauthorized. Token invalid or revoked."}), 401
     return decorated_function
 
@@ -81,7 +77,7 @@ def login_required(f):
     return decorated_function
 
 
-# --- NEW: LANDING PAGE ROUTE ---
+# --- LANDING PAGE ROUTE ---
 @app.route('/')
 def landing_page():
     if 'user' in session:
@@ -419,17 +415,15 @@ def add_device():
     device_name = data.get("device_name", "").strip()
     version = data.get("version", "").strip()
     
-    # 1. Try to get the owner from the browser session
     owner = session.get('user')
     
-    # 2. If no session (like our Python probe), get the owner from the API Token!
     if not owner:
         provided_key = request.headers.get("X-Api-Key")
         token_doc = probe_tokens_collection.find_one({"token": provided_key, "status": "active"})
         if token_doc:
             owner = token_doc.get("issued_by")
         elif provided_key == API_KEY:
-            owner = "admin" # Fallback if using the master key
+            owner = "admin"
             
     if not owner:
         return jsonify({"error": "You must be logged in or provide a valid token."}), 403
@@ -445,7 +439,7 @@ def add_device():
             "device_name": device_name,
             "owner": owner, 
             "version": version if version else "Unknown",
-            "status": "online", # Set to online since the probe just saw it!
+            "status": "online", 
             "battery": "N/A", 
             "temperature": "N/A",
             "last_seen": datetime.utcnow()
@@ -495,7 +489,7 @@ def update_firmware():
         return jsonify({"error": str(e)}), 500
 
 
-# --- SCAN MANAGEMENT ROUTES ---
+# --- SCAN MANAGEMENT ROUTES (UPDATED WITH TERMINATION) ---
 
 @app.route('/api/probe/download')
 @login_required
@@ -524,7 +518,6 @@ API_KEY = "{unique_probe_token}"
 
 HEADERS = {{"Content-Type": "application/json", "X-Api-Key": API_KEY}}
 
-# Expanded with a few more common Google MAC Prefixes
 IOT_VENDORS = {{
     "f4:f5:d8": "Google Device",
     "da:a1:19": "Google Home",
@@ -579,7 +572,7 @@ def active_ping_sweep():
         t = threading.Thread(target=ping_host, args=(ip,))
         t.start()
         threads.append(t)
-        time.sleep(0.005) # Stagger threads to prevent macOS dropping them
+        time.sleep(0.005) 
     
     for t in threads:
         t.join()
@@ -590,12 +583,10 @@ def scan_lan():
     active_ping_sweep()
     update_c2_status("Extracting topology from ARP tables...")
     
-    # Use -an to prevent slow DNS lookups and ensure consistent formatting
     sys_name = platform.system().lower()
     arp_flag = '-a' if sys_name == 'windows' else '-an'
     result = subprocess.run(['arp', arp_flag], capture_output=True, text=True)
     
-    # Bulletproof Regex: Hunts strictly for IP and MAC patterns, ignoring surrounding text
     ip_pattern = re.compile(r'([0-9]{{1,3}}\.[0-9]{{1,3}}\.[0-9]{{1,3}}\.[0-9]{{1,3}})')
     mac_pattern = re.compile(r'([0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}})')
 
@@ -608,11 +599,9 @@ def scan_lan():
             ip = ip_match.group(1)
             raw_mac = mac_match.group(1).replace('-', ':')
             
-            # MAC OS FIX: Pad single digits with zeros (e.g. 'a:b:c' -> '0a:0b:0c')
             padded_mac = ':'.join([p.zfill(2) for p in raw_mac.split(':')])
             mac_prefix = padded_mac[:8].lower()
             
-            # Ignore broadcast MACs
             if padded_mac == "ff:ff:ff:ff:ff:ff":
                 continue
                 
@@ -634,7 +623,7 @@ def scan_lan():
 
     update_c2_status(f"Recon phase complete. Uploaded {{iot_count}} devices.")
     time.sleep(2)
-    update_c2_status("Returning to stealth mode.")
+    update_c2_status("Terminating local agent connection.")
     try:
         requests.post(f"{{C2_SERVER}}/api/probe/stop_scan", headers=HEADERS)
     except Exception:
@@ -652,6 +641,8 @@ def start_beacon():
                 if data.get("command") == "scan_lan":
                     print("\\n[!] CRITICAL: LAN SCAN COMMAND RECEIVED FROM C2")
                     scan_lan()
+                    print("[*] Self-terminating as requested.")
+                    break # <--- SELF-TERMINATES THE AGENT HERE
             elif response.status_code == 401:
                 print("[-] CRITICAL ERROR: Access Token Revoked or Invalid. Terminating.")
                 break
@@ -678,7 +669,7 @@ def trigger_scan():
     try:
         system_state.update_one(
             {"setting": "scan_status"}, 
-            {"$set": {"is_scanning": True, "scan_message": "Initializing subnet sweep. Awaiting probe check-in..."}}, 
+            {"$set": {"is_scanning": True, "scan_message": "Initializing ACTIVE subnet sweep. Awaiting probe check-in..."}}, 
             upsert=True
         )
         commands_collection.update_one(
@@ -781,7 +772,6 @@ def dashboard():
     def format_time(dt):
         return dt.strftime('%b %d, %H:%M:%S') if dt else "Never"
 
-    # FIXED: The <meta http-equiv="refresh" content="10"> tag has been deleted from the <head> block below!
     html_page = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -1019,18 +1009,19 @@ def dashboard():
                         
                         <div class="p-3 mb-4 rounded" style="background-color: rgba(255, 51, 102, 0.1); border: 1px solid rgba(255, 51, 102, 0.3);">
                             <p class="mb-0 fw-bold" style="font-size: 0.85rem; color: #ff3366;">
-                                <i class="bi bi-shield-x me-2"></i>WARNING: Run this script ONLY on a network you own or have explicit authorization to audit. Do not leave the agent running indefinitely. Immediately delete `sauron_probe.py` once your reconnaissance is complete.
+                                <i class="bi bi-shield-x me-2"></i>WARNING: This agent utilizes a multi-threaded, aggressive ping sweep to actively map your subnet. It will generate noise on your local network.
                             </p>
                         </div>
                         
                         <ol style="color: #aeb2b8; font-size: 0.9rem;">
                             <li class="mb-2">Download the Python agent below.</li>
-                            <li class="mb-2">Install the required network library: <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">pip3 install requests</code></li>
+                            <li class="mb-2">Install required module: <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">pip3 install requests</code></li>
                             <li class="mb-2">Run the script in your local terminal:<br>
                                 <span class="text-muted small">Mac/Linux:</span> <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python3 sauron_probe.py</code><br>
                                 <span class="text-muted small">Windows:</span> <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python sauron_probe.py</code>
                             </li>
-                            <li>Once the agent says "ONLINE", click "Initiate Target Scan".</li>
+                            <li class="mb-2">Once the agent says "ONLINE", click "Initiate Target Scan".</li>
+                            <li><strong style="color: #00ff88;">IMPORTANT:</strong> After the scan finishes, manually refresh this page to see your discovered devices!</li>
                         </ol>
                     </div>
                     <div class="modal-footer" style="border-top: 1px solid #2b2757;">
@@ -1257,6 +1248,5 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24, next_run_time=datetime.utcnow())
 scheduler.start()
 
-# We leave this here so you can test locally, but Gunicorn ignores it in production!
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)
