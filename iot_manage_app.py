@@ -511,6 +511,8 @@ IOT_VENDORS = {{
     "f4:f5:d8": "Google Device",
     "da:a1:19": "Google Home",
     "d8:bd:b9": "Nest Cam",
+    "20:df:b9": "Google Device",
+    "f8:8a:5e": "Google Device",
     "44:65:0d": "Amazon Echo",
     "74:c2:46": "Amazon Ring",
     "00:17:88": "Philips Hue",
@@ -528,17 +530,20 @@ def update_c2_status(message):
 def scan_lan():
     update_c2_status("Commencing local ARP network scan...")
     result = subprocess.run(['arp', '-a'], capture_output=True, text=True)
-    pattern = re.compile(r'\((.*?)\)\s+at\s+([0-9a-f:]+)')
+    pattern = re.compile(r'\((.*?)\)\s+at\s+([0-9a-fA-F:]+)')
     found_devices = pattern.findall(result.stdout)
 
     iot_count = 0
     for ip, mac in found_devices:
-        mac_prefix = mac[:8].lower()
+        # MAC OS FIX: Pad single digits with zeros (e.g. 'a:b:c' -> '0a:0b:0c')
+        padded_mac = ':'.join([p.zfill(2) for p in mac.split(':')])
+        mac_prefix = padded_mac[:8].lower()
+        
         if mac_prefix in IOT_VENDORS:
             iot_count += 1
             device_type = IOT_VENDORS[mac_prefix]
             device_name = f"Discovered {{device_type}} ({{ip}})"
-            update_c2_status(f"Found IoT: {{device_name}} [MAC: {{mac}}]")
+            update_c2_status(f"Found IoT: {{device_name}} [MAC: {{padded_mac}}]")
 
             payload = {{"device_name": device_name, "version": "1.0.0"}}
             try:
@@ -941,7 +946,11 @@ def dashboard():
                         
                         <ol style="color: #aeb2b8; font-size: 0.9rem;">
                             <li class="mb-2">Download the Python agent below.</li>
-                            <li class="mb-2">Run the script in your local terminal: <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python3 sauron_probe.py</code></li>
+                            <li class="mb-2">Install the required network library: <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">pip3 install requests</code></li>
+                            <li class="mb-2">Run the script in your local terminal:<br>
+                                <span class="text-muted small">Mac/Linux:</span> <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python3 sauron_probe.py</code><br>
+                                <span class="text-muted small">Windows:</span> <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python sauron_probe.py</code>
+                            </li>
                             <li>Once the agent says "ONLINE", click "Initiate Target Scan".</li>
                         </ol>
                     </div>
