@@ -7,7 +7,7 @@ from datetime import datetime
 from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.middleware.proxy_fix import ProxyFix  # NEW: Handles NGINX IP routing
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -21,6 +21,7 @@ API_KEY = os.getenv("SAURON_API_KEY", "fallback_key_if_missing")
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_cookie_secret")
 
+# NEW: Tell Flask to trust the real IPs forwarded by NGINX
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # --- Initialize Rate Limiter ---
@@ -61,10 +62,13 @@ def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         provided_key = request.headers.get("X-Api-Key")
+        
         if provided_key == API_KEY:
             return f(*args, **kwargs)
+            
         if probe_tokens_collection.find_one({"token": provided_key, "status": "active"}):
             return f(*args, **kwargs)
+            
         return jsonify({"error": "Unauthorized. Token invalid or revoked."}), 401
     return decorated_function
 
@@ -77,7 +81,7 @@ def login_required(f):
     return decorated_function
 
 
-# --- LANDING PAGE ROUTE ---
+# --- NEW: LANDING PAGE ROUTE ---
 @app.route('/')
 def landing_page():
     if 'user' in session:
@@ -233,6 +237,13 @@ def login():
     <!DOCTYPE html>
     <html lang="en">
     <head>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-4M4H383ZT1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', 'G-4M4H383ZT1');
+        </script>
         <title>Sauron Hub | Authenticate</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -256,7 +267,9 @@ def login():
                 <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">SAURON LOGIN</h3>
                 <p class="small" style="color: #aeb2b8;">AUTHORIZED PERSONNEL ONLY</p>
             </div>
+            
             {error_msg}
+
             <form method="POST" action="/login">
                 <div class="mb-3">
                     <label class="form-label">USERNAME</label>
@@ -268,6 +281,7 @@ def login():
                 </div>
                 <button type="submit" class="btn btn-cyber mb-4">AUTHENTICATE</button>
             </form>
+            
             <div class="text-center border-top border-secondary pt-3 mt-2">
                 <a href="/register" class="cyber-link">CREATE ACCOUNT &rarr;</a>
             </div>
@@ -305,6 +319,13 @@ def register():
     <!DOCTYPE html>
     <html lang="en">
     <head>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-4M4H383ZT1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', 'G-4M4H383ZT1');
+        </script>
         <title>Sauron Hub | Create Account</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -328,7 +349,9 @@ def register():
                 <h3 class="fw-bold mt-3 text-white" style="letter-spacing: 2px;">CREATE ACCOUNT</h3>
                 <p class="small" style="color: #aeb2b8;">REQUEST PLATFORM ACCESS</p>
             </div>
+            
             {error_msg}
+
             <form method="POST" action="/register">
                 <div class="mb-3">
                     <label class="form-label">NEW USERNAME</label>
@@ -340,6 +363,7 @@ def register():
                 </div>
                 <button type="submit" class="btn btn-cyber mb-4">REGISTER</button>
             </form>
+            
             <div class="text-center border-top border-secondary pt-3 mt-2">
                 <a href="/login" class="cyber-link">&larr; RETURN TO LOGIN</a>
             </div>
@@ -457,7 +481,7 @@ def update_firmware():
         return jsonify({"error": str(e)}), 500
 
 
-# --- SCAN MANAGEMENT ROUTES (UPDATED WITH ACTIVE RECON) ---
+# --- SCAN MANAGEMENT ROUTES ---
 
 @app.route('/api/probe/download')
 @login_required
@@ -472,7 +496,6 @@ def download_probe():
         "status": "active"
     })
     
-    # NEW: Multi-threaded Active Recon Payload
     probe_code = f"""import requests
 import time
 import subprocess
@@ -487,12 +510,15 @@ API_KEY = "{unique_probe_token}"
 
 HEADERS = {{"Content-Type": "application/json", "X-Api-Key": API_KEY}}
 
+# Expanded with a few more common Google MAC Prefixes
 IOT_VENDORS = {{
     "f4:f5:d8": "Google Device",
     "da:a1:19": "Google Home",
     "d8:bd:b9": "Nest Cam",
     "20:df:b9": "Google Device", 
     "f8:8a:5e": "Google Device", 
+    "1c:f2:9a": "Google Device",
+    "48:b4:23": "Google Device",
     "44:65:0d": "Amazon Echo",
     "74:c2:46": "Amazon Ring",
     "00:17:88": "Philips Hue",
@@ -508,22 +534,25 @@ def update_c2_status(message):
         pass
 
 def get_local_subnet():
-    # Attempt to grab the local IP address dynamically
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
     except Exception:
-        ip = "192.168.1.1" # Fallback
+        ip = "192.168.1.1"
     finally:
         s.close()
     return '.'.join(ip.split('.')[:-1])
 
 def ping_host(ip):
-    # Cross-platform ping flags
-    param = '-n' if platform.system().lower() == 'windows' else '-c'
-    timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
-    timeout_val = '1000' if platform.system().lower() == 'windows' else '1'
+    sys_name = platform.system().lower()
+    if sys_name == 'windows':
+        param, timeout_param, timeout_val = '-n', '-w', '1000'
+    elif sys_name == 'darwin':
+        param, timeout_param, timeout_val = '-c', '-W', '1000'
+    else:
+        param, timeout_param, timeout_val = '-c', '-W', '1'
+        
     subprocess.run(['ping', param, '1', timeout_param, timeout_val, ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def active_ping_sweep():
@@ -531,48 +560,63 @@ def active_ping_sweep():
     update_c2_status(f"WARNING: Initiating ACTIVE aggressive ping sweep on {{subnet}}.0/24...")
     
     threads = []
-    # Rapidly ping 254 addresses concurrently
     for i in range(1, 255):
         ip = f"{{subnet}}.{{i}}"
         t = threading.Thread(target=ping_host, args=(ip,))
         t.start()
         threads.append(t)
+        time.sleep(0.005) # Stagger threads to prevent macOS dropping them
     
-    # Wait for the entire sweep to finish
     for t in threads:
         t.join()
         
     update_c2_status("Active sweep complete. ARP cache heavily populated.")
 
 def scan_lan():
-    # 1. Execute the aggressive wake-up call
     active_ping_sweep()
-    
-    # 2. Extract the topology from the populated ARP table
     update_c2_status("Extracting topology from ARP tables...")
-    result = subprocess.run(['arp', '-a'], capture_output=True, text=True)
-    pattern = re.compile(r'\((.*?)\)\s+at\s+([0-9a-fA-F:]+)')
-    found_devices = pattern.findall(result.stdout)
+    
+    # Use -an to prevent slow DNS lookups and ensure consistent formatting
+    sys_name = platform.system().lower()
+    arp_flag = '-a' if sys_name == 'windows' else '-an'
+    result = subprocess.run(['arp', arp_flag], capture_output=True, text=True)
+    
+    # Bulletproof Regex: Hunts strictly for IP and MAC patterns, ignoring surrounding text
+    ip_pattern = re.compile(r'([0-9]{{1,3}}\.[0-9]{{1,3}}\.[0-9]{{1,3}}\.[0-9]{{1,3}})')
+    mac_pattern = re.compile(r'([0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}}[:-][0-9a-fA-F]{{1,2}})')
 
     iot_count = 0
-    for ip, mac in found_devices:
-        # MAC OS FIX: Pad single digits with zeros (e.g. 'a:b:c' -> '0a:0b:0c')
-        padded_mac = ':'.join([p.zfill(2) for p in mac.split(':')])
-        mac_prefix = padded_mac[:8].lower()
+    for line in result.stdout.splitlines():
+        ip_match = ip_pattern.search(line)
+        mac_match = mac_pattern.search(line)
         
-        if mac_prefix in IOT_VENDORS:
-            iot_count += 1
-            device_type = IOT_VENDORS[mac_prefix]
-            device_name = f"Discovered {{device_type}} ({{ip}})"
-            update_c2_status(f"Found IoT: {{device_name}} [MAC: {{padded_mac}}]")
+        if ip_match and mac_match:
+            ip = ip_match.group(1)
+            raw_mac = mac_match.group(1).replace('-', ':')
+            
+            # MAC OS FIX: Pad single digits with zeros (e.g. 'a:b:c' -> '0a:0b:0c')
+            padded_mac = ':'.join([p.zfill(2) for p in raw_mac.split(':')])
+            mac_prefix = padded_mac[:8].lower()
+            
+            # Ignore broadcast MACs
+            if padded_mac == "ff:ff:ff:ff:ff:ff":
+                continue
+                
+            print(f"    [Local Debug] Found IP: {{ip}} -> MAC: {{padded_mac}}")
+            
+            if mac_prefix in IOT_VENDORS:
+                iot_count += 1
+                device_type = IOT_VENDORS[mac_prefix]
+                device_name = f"Discovered {{device_type}} ({{ip}})"
+                update_c2_status(f"Found IoT: {{device_name}} [MAC: {{padded_mac}}]")
 
-            payload = {{"device_name": device_name, "version": "1.0.0"}}
-            try:
-                r = requests.post(f"{{C2_SERVER}}/api/device/add", json=payload, headers=HEADERS, timeout=5)
-                if r.status_code == 201:
-                    update_c2_status(f"Uploaded {{device_type}} to Sauron Cloud")
-            except Exception as e:
-                pass
+                payload = {{"device_name": device_name, "version": "1.0.0"}}
+                try:
+                    r = requests.post(f"{{C2_SERVER}}/api/device/add", json=payload, headers=HEADERS, timeout=5)
+                    if r.status_code == 201:
+                        update_c2_status(f"Uploaded {{device_type}} to Sauron Cloud")
+                except Exception:
+                    pass
 
     update_c2_status(f"Recon phase complete. Uploaded {{iot_count}} devices.")
     time.sleep(2)
@@ -598,7 +642,6 @@ def start_beacon():
                 print("[-] CRITICAL ERROR: Access Token Revoked or Invalid. Terminating.")
                 break
         except Exception:
-            # Silently handle transient connection drops
             pass
         
         time.sleep(3) 
@@ -621,7 +664,7 @@ def trigger_scan():
     try:
         system_state.update_one(
             {"setting": "scan_status"}, 
-            {"$set": {"is_scanning": True, "scan_message": "Initializing ACTIVE subnet sweep. Awaiting probe check-in..."}}, 
+            {"$set": {"is_scanning": True, "scan_message": "Initializing subnet sweep. Awaiting probe check-in..."}}, 
             upsert=True
         )
         commands_collection.update_one(
@@ -724,10 +767,18 @@ def dashboard():
     def format_time(dt):
         return dt.strftime('%b %d, %H:%M:%S') if dt else "Never"
 
+    # FIXED: The <meta http-equiv="refresh" content="10"> tag has been deleted from the <head> block below!
     html_page = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-4M4H383ZT1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', 'G-4M4H383ZT1');
+        </script>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Sauron Hub | Dashboard</title>
@@ -954,13 +1005,13 @@ def dashboard():
                         
                         <div class="p-3 mb-4 rounded" style="background-color: rgba(255, 51, 102, 0.1); border: 1px solid rgba(255, 51, 102, 0.3);">
                             <p class="mb-0 fw-bold" style="font-size: 0.85rem; color: #ff3366;">
-                                <i class="bi bi-shield-x me-2"></i>WARNING: This agent utilizes a multi-threaded, aggressive ping sweep to actively map your subnet. It will generate noise on your local network.
+                                <i class="bi bi-shield-x me-2"></i>WARNING: Run this script ONLY on a network you own or have explicit authorization to audit. Do not leave the agent running indefinitely. Immediately delete `sauron_probe.py` once your reconnaissance is complete.
                             </p>
                         </div>
                         
                         <ol style="color: #aeb2b8; font-size: 0.9rem;">
                             <li class="mb-2">Download the Python agent below.</li>
-                            <li class="mb-2">Install required module: <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">pip3 install requests</code></li>
+                            <li class="mb-2">Install the required network library: <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">pip3 install requests</code></li>
                             <li class="mb-2">Run the script in your local terminal:<br>
                                 <span class="text-muted small">Mac/Linux:</span> <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python3 sauron_probe.py</code><br>
                                 <span class="text-muted small">Windows:</span> <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python sauron_probe.py</code>
@@ -1192,5 +1243,6 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=fetch_global_threat_intel, trigger="interval", hours=24, next_run_time=datetime.utcnow())
 scheduler.start()
 
+# We leave this here so you can test locally, but Gunicorn ignores it in production!
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)
