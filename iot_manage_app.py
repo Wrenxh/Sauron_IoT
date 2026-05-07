@@ -951,8 +951,8 @@ def dashboard():
                 ota_button = f'<button class="btn btn-sm btn-cyber me-2" style="padding: 5px 10px; font-size: 0.7rem;" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Push Update">PATCH OTA</button>'
 
             # NEW: Edit Button
-            edit_button = f'<button class="btn btn-sm btn-cyber-outline me-2" onclick="openEditModal(\'{name}\', \'{current_version}\')" title="Edit Device"><i class="bi bi-pencil"></i></button>'
-            delete_button = f'<button class="btn btn-sm btn-cyber-outline" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3"></i></button>'
+            edit_button = f'<button class="btn btn-sm btn-cyber-outline me-2" onclick="openEditModal(\'{name}\', \'{current_version}\')" title="Edit Device"><i class="bi bi-pencil" style="color: #2b2757;"></i></button>'
+            delete_button = f'<button class="btn btn-sm btn-cyber-outline" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3" style="color: #ff3366;"></i></button>'
 
             telemetry = f'<span class="me-3" style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-lightning-charge-fill text-muted me-1"></i>{battery}{"%" if battery != "N/A" else ""}</span>'
             telemetry += f'<span style="font-family: \'Roboto Mono\', monospace; font-size: 0.85rem;"><i class="bi bi-thermometer-half text-muted me-1"></i>{temp}{"°F" if temp != "N/A" else ""}</span>'
