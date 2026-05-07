@@ -3,7 +3,7 @@ import re
 import requests
 import time
 
-SERVER_URL = "http://13.56.200.180:5005/api/device/add"
+SERVER_URL = "https://sauroniot.com"
 POLL_URL = "http://13.56.200.180:5005/api/probe/poll"
 
 API_KEY = "super_secret_cyber_key_2026"

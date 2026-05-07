@@ -286,7 +286,7 @@ def login():
                 <a href="/register" class="cyber-link">CREATE ACCOUNT &rarr;</a>
             </div>
             <div class="text-center mt-3">
-                <a href="/" class="text-muted text-decoration-none small">&larr; Back to Home</a>
+                <a href="/" class="text-white text-decoration-none small">&larr; Back to Home</a>
             </div>
         </div>
     </body>
@@ -368,7 +368,7 @@ def register():
                 <a href="/login" class="cyber-link">&larr; RETURN TO LOGIN</a>
             </div>
             <div class="text-center mt-3">
-                <a href="/" class="text-muted text-decoration-none small">&larr; Back to Home</a>
+                <a href="/" class="text-white text-decoration-none small">&larr; Back to Home</a>
             </div>
         </div>
     </body>
@@ -486,7 +486,7 @@ def update_firmware():
 @app.route('/api/probe/download')
 @login_required
 def download_probe():
-    server_url = request.host_url.rstrip('/')
+    server_url = "https://sauroniot.com"
     unique_probe_token = f"sauron_pt_{secrets.token_hex(16)}"
     
     probe_tokens_collection.insert_one({
@@ -496,16 +496,26 @@ def download_probe():
         "status": "active"
     })
     
-    probe_code = f"""import requests
+    probe_code = f"""import subprocess
+import re
+import requests
 import time
 
 # --- PROBE CONFIGURATION ---
 C2_SERVER = "{server_url}" 
 API_KEY = "{unique_probe_token}"
 
-HEADERS = {{
-    "Content-Type": "application/json",
-    "X-Api-Key": API_KEY
+HEADERS = {{"Content-Type": "application/json", "X-Api-Key": API_KEY}}
+
+IOT_VENDORS = {{
+    "f4:f5:d8": "Google Device",
+    "da:a1:19": "Google Home",
+    "d8:bd:b9": "Nest Cam",
+    "44:65:0d": "Amazon Echo",
+    "74:c2:46": "Amazon Ring",
+    "00:17:88": "Philips Hue",
+    "b8:27:eb": "Raspberry Pi", 
+    "e8:db:84": "Tuya Smart Plug"
 }}
 
 def update_c2_status(message):
@@ -515,19 +525,34 @@ def update_c2_status(message):
     except Exception:
         pass
 
-def execute_lan_scan():
-    update_c2_status("Initializing rapid subnet sweep (192.168.1.0/24)...")
-    time.sleep(2)
-    for i in range(1, 20):
-        update_c2_status(f"Pinging 192.168.1.{{i}}...")
-        time.sleep(0.4)
-    update_c2_status("Sweep complete. Correlating MAC addresses...")
+def scan_lan():
+    update_c2_status("Commencing local ARP network scan...")
+    result = subprocess.run(['arp', '-a'], capture_output=True, text=True)
+    pattern = re.compile(r'\((.*?)\)\s+at\s+([0-9a-f:]+)')
+    found_devices = pattern.findall(result.stdout)
+
+    iot_count = 0
+    for ip, mac in found_devices:
+        mac_prefix = mac[:8].lower()
+        if mac_prefix in IOT_VENDORS:
+            iot_count += 1
+            device_type = IOT_VENDORS[mac_prefix]
+            device_name = f"Discovered {{device_type}} ({{ip}})"
+            update_c2_status(f"Found IoT: {{device_name}} [MAC: {{mac}}]")
+
+            payload = {{"device_name": device_name, "version": "1.0.0"}}
+            try:
+                r = requests.post(f"{{C2_SERVER}}/api/device/add", json=payload, headers=HEADERS, timeout=5)
+                if r.status_code == 201:
+                    update_c2_status(f"Uploaded {{device_type}} to Sauron Cloud")
+            except Exception as e:
+                pass
+
+    update_c2_status(f"Scan complete. Uploaded {{iot_count}} devices.")
     time.sleep(2)
     update_c2_status("Returning to stealth mode.")
-    time.sleep(1)
     try:
         requests.post(f"{{C2_SERVER}}/api/probe/stop_scan", headers=HEADERS)
-        print("[+] Scan finished. Awaiting next command.")
     except Exception:
         pass
 
@@ -536,19 +561,26 @@ def start_beacon():
     print(f"Targeting C2 Server: {{C2_SERVER}}")
     while True:
         try:
-            response = requests.get(f"{{C2_SERVER}}/api/probe/poll", headers=HEADERS)
-            if response.status_code == 200 and response.json().get("command") == "scan_lan":
-                print("\\n[!] CRITICAL: LAN SCAN COMMAND RECEIVED FROM C2")
-                execute_lan_scan()
+            response = requests.get(f"{{C2_SERVER}}/api/probe/poll", headers=HEADERS, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("command") == "scan_lan":
+                    print("\\n[!] CRITICAL: LAN SCAN COMMAND RECEIVED FROM C2")
+                    scan_lan()
             elif response.status_code == 401:
                 print("[-] CRITICAL ERROR: Access Token Revoked or Invalid. Terminating.")
                 break
         except Exception:
-            print("[-] C2 Server unreachable. Retrying in 5 seconds...")
+            pass
+        
         time.sleep(3) 
 
 if __name__ == "__main__":
-    start_beacon()
+    try:
+        start_beacon()
+    except KeyboardInterrupt:
+        print("\\nProbe disconnected.")
 """
     return app.response_class(
         probe_code,
@@ -628,6 +660,10 @@ def dashboard():
     all_devices = list(devices_collection.find({"owner": session.get('user')}).sort("last_seen", -1))
     firmware_docs = firmware_collection.find()
     LATEST_FIRMWARE = {doc['model']: doc['latest_version'] for doc in firmware_docs}
+
+    dropdown_options = ""
+    for model in sorted(LATEST_FIRMWARE.keys()):
+        dropdown_options += f'<option value="{model}">{model}</option>'
     
     scan_doc = system_state.find_one({"setting": "scan_status"})
     is_scanning = scan_doc.get("is_scanning", False) if scan_doc else False
@@ -661,6 +697,7 @@ def dashboard():
     def format_time(dt):
         return dt.strftime('%b %d, %H:%M:%S') if dt else "Never"
 
+    # FIXED: The <meta http-equiv="refresh" content="10"> tag has been deleted from the <head> block below!
     html_page = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -678,7 +715,6 @@ def dashboard():
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-        <meta http-equiv="refresh" content="10"> 
         <style>
             :root {{
                 --bg-void: #090814;
@@ -870,7 +906,10 @@ def dashboard():
                             <form id="queryForm">
                                 <div class="mb-4">
                                     <label for="device_name_input" class="form-label">TARGET IDENTIFIER</label>
-                                    <input type="text" class="form-control" id="device_name_input" required placeholder="e.g. Google Home">
+                                    <select class="form-control mb-3" id="device_name_input" required style="appearance: auto;">
+                                    <option value="" disabled selected>Select a device model...</option>
+                                    {dropdown_options}
+                                    </select>
                                 </div>
                                 <div class="mb-5">
                                     <label for="firmware_version" class="form-label">REPORTED VERSION</label>
