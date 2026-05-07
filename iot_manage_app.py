@@ -1077,11 +1077,11 @@ def dashboard():
                         <form id="editDeviceForm">
                             <input type="hidden" id="edit_old_name">
                             <div class="mb-3">
-                                <label class="form-label text-muted small">ENDPOINT ALIAS</label>
+                                <label class="form-label text-white small">ENDPOINT ALIAS</label>
                                 <input type="text" class="form-control" id="edit_new_name" required>
                             </div>
                             <div class="mb-4">
-                                <label class="form-label text-muted small">FIRMWARE VERSION</label>
+                                <label class="form-label text-white small">FIRMWARE VERSION</label>
                                 <input type="text" class="form-control" id="edit_new_version" required>
                             </div>
                             <button type="submit" class="btn btn-cyber w-100" style="padding: 10px 20px;">SAVE CHANGES</button>
