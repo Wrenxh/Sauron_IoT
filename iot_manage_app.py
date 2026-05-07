@@ -1054,7 +1054,8 @@ def dashboard():
                                 <span class="text-muted small">Windows:</span> <code style="color: #9d4edd; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">python sauron_probe.py</code>
                             </li>
                             <li class="mb-2">Once the agent says "ONLINE", click "Initiate Target Scan".</li>
-                            <li><strong style="color: #00ff88;">IMPORTANT:</strong> After the scan finishes, manually refresh this page to see your discovered devices!</li>
+                            <li class="mb-2"><strong style="color: #00ff88;">IMPORTANT:</strong> After the scan finishes, manually refresh this page to see your newly discovered devices!</li>
+                            <li>Finally, click the <i class="bi bi-pencil" style="color: #9d4edd;"></i> <strong>Edit</strong> button next to your new devices to assign their correct firmware versions.</li>
                         </ol>
                     </div>
                     <div class="modal-footer" style="border-top: 1px solid #2b2757;">
