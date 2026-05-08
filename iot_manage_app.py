@@ -1228,13 +1228,13 @@ def threat_intel():
         notes = doc.get("release_notes", "No active alerts.")
         
         table_rows += f"""
-            <tr>
-                <td class="fw-bold text-white">{model}</td>
-                <td style="font-family: 'Roboto Mono', monospace;" class="text-success">{latest_version}</td>
-                <td>{get_severity_badge(severity)}</td>
-                <td class="text-muted small" style="max-width: 400px; white-space: normal;">{notes}</td>
-            </tr>
-        """
+        <tr>
+            <td class="fw-bold text-muted">{model}</td>
+            <td style="font-family: 'Roboto Mono', monospace;" class="text-success">{latest_version}</td>
+            <td>{get_severity_badge(severity)}</td>
+            <td class="text-muted small" style="max-width: 400px; white-space: normal;">{notes}</td>
+        </tr>
+    """
 
     if not table_rows:
         table_rows = "<tr><td colspan='4' class='text-center py-5 text-muted'>NO ACTIVE THREATS IN DATABASE</td></tr>"
