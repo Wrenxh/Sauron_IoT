@@ -450,7 +450,6 @@ def add_device():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# NEW: Edit Device Route
 @app.route('/api/device/edit', methods=['POST'])
 @require_api_key
 def edit_device():
@@ -464,7 +463,6 @@ def edit_device():
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
-        # Check if they are renaming it to something that already exists
         if old_name != new_name and devices_collection.find_one({"device_name": new_name, "owner": owner}):
             return jsonify({"error": "A device with that new name already exists."}), 409
 
@@ -478,7 +476,6 @@ def edit_device():
         return jsonify({"status": "success"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/api/device/remove', methods=['POST'])
 @require_api_key
@@ -874,6 +871,7 @@ def dashboard():
                 </a>
                 
                 <div class="d-flex align-items-center">
+                    <a href="/intel" class="text-white text-decoration-none fw-bold me-4" style="font-size: 0.9rem;"><i class="bi bi-shield-shaded me-1" style="color: var(--primary-purple);"></i> THREAT INTEL</a>
                     <span class="small fw-bold me-4" style="color: #aeb2b8; letter-spacing: 1px;">
                         <i class="bi bi-person-bounding-box me-2" style="color: #9d4edd;"></i>USER: <span class="text-white">{operator_name}</span>
                     </span>
@@ -950,7 +948,6 @@ def dashboard():
                 fw_display = f'<span style="color: var(--danger-red); font-weight: 700; font-size: 0.85rem;"><i class="bi bi-shield-exclamation me-1"></i> VULNERABLE</span> <span class="text-muted ms-1" style="font-size: 0.75rem;">({current_version} &rarr; {target_version})</span>'
                 ota_button = f'<button class="btn btn-sm btn-cyber me-2" style="padding: 5px 10px; font-size: 0.7rem;" onclick="pushOTAUpdate(\'{name}\', \'{target_version}\')" title="Push Update">PATCH OTA</button>'
 
-            # NEW: Edit Button
             edit_button = f'<button class="btn btn-sm btn-cyber-outline me-2" onclick="openEditModal(\'{name}\', \'{current_version}\')" title="Edit Device"><i class="bi bi-pencil" style="color: #2b2757;"></i></button>'
             delete_button = f'<button class="btn btn-sm btn-cyber-outline" onclick="removeDevice(\'{name}\')" title="Revoke Device"><i class="bi bi-trash3" style="color: #ff3366;"></i></button>'
 
@@ -1143,7 +1140,6 @@ def dashboard():
                 }});
             }});
 
-            // NEW: Javascript to handle the Edit Modal and Backend Request
             function openEditModal(name, version) {{
                 document.getElementById('edit_old_name').value = name;
                 document.getElementById('edit_new_name').value = name;
@@ -1199,6 +1195,165 @@ def dashboard():
                     }});
                 }}
             }}
+        </script>
+    </body>
+    </html>
+    """
+    return html_page
+
+# --- NEW: THREAT INTEL PAGE ROUTE ---
+@app.route('/intel')
+@login_required
+def threat_intel():
+    operator_name = session.get('user', 'Operator').upper()
+    
+    # Fetch all global threat records
+    intel_docs = list(firmware_collection.find())
+    
+    def get_severity_badge(severity):
+        if severity == "CRITICAL":
+            return '<span class="badge" style="background: rgba(255, 51, 102, 0.1); color: #ff3366; border: 1px solid rgba(255, 51, 102, 0.3);">CRITICAL</span>'
+        elif severity == "HIGH":
+            return '<span class="badge" style="background: rgba(255, 157, 0, 0.1); color: #ff9d00; border: 1px solid rgba(255, 157, 0, 0.3);">HIGH</span>'
+        elif severity == "MEDIUM":
+            return '<span class="badge" style="background: rgba(157, 78, 221, 0.1); color: #9d4edd; border: 1px solid rgba(157, 78, 221, 0.3);">MEDIUM</span>'
+        else: # LOW
+            return '<span class="badge" style="background: rgba(0, 255, 136, 0.1); color: #00ff88; border: 1px solid rgba(0, 255, 136, 0.3);">LOW</span>'
+
+    table_rows = ""
+    for doc in intel_docs:
+        model = doc.get("model", "Unknown")
+        latest_version = doc.get("latest_version", "Unknown")
+        severity = doc.get("severity", "LOW")
+        notes = doc.get("release_notes", "No active alerts.")
+        
+        table_rows += f"""
+            <tr>
+                <td class="fw-bold text-white">{model}</td>
+                <td style="font-family: 'Roboto Mono', monospace;" class="text-success">{latest_version}</td>
+                <td>{get_severity_badge(severity)}</td>
+                <td class="text-muted small" style="max-width: 400px; white-space: normal;">{notes}</td>
+            </tr>
+        """
+
+    if not table_rows:
+        table_rows = "<tr><td colspan='4' class='text-center py-5 text-muted'>NO ACTIVE THREATS IN DATABASE</td></tr>"
+
+    html_page = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sauron Hub | Threat Intel</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+        <style>
+            :root {{
+                --bg-void: #090814;
+                --surface: #14122b;
+                --surface-hover: #1c193b;
+                --border-color: #2b2757;
+                --primary-purple: #9d4edd;
+                --glow-purple: 0 0 20px rgba(157, 78, 221, 0.4);
+                --text-main: #f8f9fa;
+                --text-muted: #8b87a8;
+                --success-green: #00ff88;
+                --warning-orange: #ff9d00;
+                --danger-red: #ff3366;
+            }}
+
+            body {{ background-color: var(--bg-void); color: var(--text-main); font-family: 'Inter', sans-serif; min-height: 100vh; 
+                   background-image: radial-gradient(circle at top right, rgba(157, 78, 221, 0.1), transparent 40%); }}
+            
+            .navbar {{ background-color: rgba(20, 18, 43, 0.8) !important; backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); padding: 15px 0; }}
+            .navbar-brand {{ color: #fff !important; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }}
+            
+            .card {{ background-color: var(--surface); border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-radius: 6px; }}
+            .card-header {{ background-color: transparent; border-bottom: 1px solid var(--border-color); padding: 15px 20px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }}
+            
+            .table-container {{ padding: 0; }}
+            .table {{ color: var(--text-main); margin-bottom: 0; }}
+            .table th {{ background-color: rgba(0,0,0,0.2); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); border-top: none; padding: 15px 20px;}}
+            .table td {{ vertical-align: middle; padding: 15px 20px; border-bottom: 1px solid var(--border-color); }}
+            .table-hover tbody tr:hover {{ background-color: var(--surface-hover); color: #fff; }}
+            
+            .badge {{ padding: 6px 10px; font-weight: 700; letter-spacing: 0.5px; font-size: 0.7rem; border-radius: 4px; }}
+            
+            .btn-cyber-outline {{ background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; transition: all 0.3s; text-decoration: none; display: inline-block; padding: 5px 10px; border-radius: 4px;}}
+            .btn-cyber-outline:hover {{ background-color: rgba(255,255,255,0.05); color: white; border-color: var(--text-muted); }}
+            
+            .search-input {{ background-color: rgba(0,0,0,0.3) !important; border: 1px solid var(--border-color) !important; color: white !important; border-radius: 4px; padding: 10px 15px; font-family: 'Inter', sans-serif; font-size: 0.9rem; width: 300px; }}
+            .search-input:focus {{ box-shadow: 0 0 0 0.25rem rgba(157, 78, 221, 0.25) !important; border-color: var(--primary-purple) !important; outline: none; }}
+        </style>
+    </head>
+    <body>
+        <nav class="navbar navbar-expand-lg mb-5 sticky-top">
+            <div class="container-fluid px-5">
+                <a class="navbar-brand d-flex align-items-center" href="/dashboard">
+                    <i class="bi bi-hexagon-fill me-2" style="color: var(--primary-purple); text-shadow: var(--glow-purple);"></i>
+                    SAURON PLATFORM
+                </a>
+                
+                <div class="d-flex align-items-center">
+                    <a href="/dashboard" class="text-white text-decoration-none fw-bold me-4" style="font-size: 0.9rem;"><i class="bi bi-speedometer2 me-1" style="color: var(--primary-purple);"></i> DASHBOARD</a>
+                    <span class="small fw-bold me-4" style="color: #aeb2b8; letter-spacing: 1px;">
+                        <i class="bi bi-person-bounding-box me-2" style="color: #9d4edd;"></i>USER: <span class="text-white">{operator_name}</span>
+                    </span>
+                    <a href="/logout" class="btn btn-cyber-outline" style="padding: 10px 20px;"><i class="bi bi-box-arrow-right me-1"></i> DISCONNECT</a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-fluid px-5">
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div>
+                    <h3 class="fw-bold mb-1" style="letter-spacing: -0.5px;">Global Threat Intelligence</h3>
+                    <p class="text-muted small mb-0">Live feed of CVEs, baseline requirements, and vulnerability reports.</p>
+                </div>
+                <div>
+                    <input type="text" id="intelSearch" class="search-input" placeholder="Search vendor or model...">
+                </div>
+            </div>
+            
+            <div class="card mb-5">
+                <div class="card-header d-flex justify-content-between p-3 border-secondary">
+                    <span class="fw-bold"><i class="bi bi-bug me-2"></i>VULNERABILITY DATABASE</span>
+                </div>
+                <div class="card-body table-container table-responsive">
+                    <table class="table table-hover" id="intelTable">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Vendor / Model</th>
+                                <th>Secure Baseline</th>
+                                <th>Severity</th>
+                                <th>Release Notes & CVE Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {table_rows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Simple Client-Side Search Filter
+            document.getElementById('intelSearch').addEventListener('keyup', function() {{
+                let filter = this.value.toLowerCase();
+                let rows = document.querySelectorAll('#intelTable tbody tr');
+                
+                rows.forEach(row => {{
+                    let text = row.innerText.toLowerCase();
+                    if(text.includes(filter)) {{
+                        row.style.display = '';
+                    }} else {{
+                        row.style.display = 'none';
+                    }}
+                }});
+            }});
         </script>
     </body>
     </html>
@@ -1295,17 +1450,17 @@ def fetch_global_threat_intel():
         simulated_live_feed = [
             {"model": "Google Home", "latest_version": "3.80.1111", "severity": "CRITICAL", "release_notes": "URGENT: Patches zero-day buffer overflow in mDNS responder (CVE-2026-1094)."},
             {"model": "Google Nest Hub", "latest_version": "Fuchsia 14.20230831.4", "severity": "MEDIUM", "release_notes": "Resolves minor UI thread locking and patches Cast protocol memory leak."},
-            {"model": "Echo 4th gen", "latest_version": "v12584499999", "severity": "MEDIUM", "release_notes": "Routine security patch addressing Bluetooth LE pairing vulnerabilities."},
+            {"model": "Amazon Echo", "latest_version": "v12584499999", "severity": "MEDIUM", "release_notes": "Routine security patch addressing Bluetooth LE pairing vulnerabilities."},
             {"model": "Apple HomePod mini", "latest_version": "AudioOS 17.4.1", "severity": "HIGH", "release_notes": "Addresses a WebKit vulnerability that could allow arbitrary code execution via malicious audio streams."},
-            {"model": "Nest Outdoor Cam", "latest_version": "v1.72", "severity": "CRITICAL", "release_notes": "Fixes cryptographic downgrade attack forcing unencrypted video broadcast."},
-            {"model": "Ring Video Doorbell", "latest_version": "v3.1.5", "severity": "HIGH", "release_notes": "Mitigates Wi-Fi deauthentication attack vector designed to blind the camera."},
+            {"model": "Nest Cam", "latest_version": "v1.72", "severity": "CRITICAL", "release_notes": "Fixes cryptographic downgrade attack forcing unencrypted video broadcast."},
+            {"model": "Amazon Ring", "latest_version": "v3.1.5", "severity": "HIGH", "release_notes": "Mitigates Wi-Fi deauthentication attack vector designed to blind the camera."},
             {"model": "Wyze Cam v3", "latest_version": "4.36.11.8391", "severity": "CRITICAL", "release_notes": "Patches an unauthenticated remote access flaw allowing camera feed hijacking."},
             {"model": "Arlo Pro 4", "latest_version": "1.080.20.1", "severity": "LOW", "release_notes": "Improves battery optimization and fixes a minor DNS resolution delay."},
             {"model": "Nest Learning Thermostat", "latest_version": "6.2-27", "severity": "MEDIUM", "release_notes": "Patches a localized DoS vulnerability that could force the device into a reboot loop."},
             {"model": "Ecobee SmartThermostat", "latest_version": "4.7.5.352", "severity": "LOW", "release_notes": "Fixes integration timeouts with third-party HVAC monitoring APIs."},
-            {"model": "Philips Hue Bridge", "latest_version": "v1.108.2", "severity": "HIGH", "release_notes": "Patches a Zigbee buffer overflow that could allow the bridge to be used as a persistent pivot point."},
+            {"model": "Philips Hue", "latest_version": "v1.108.2", "severity": "HIGH", "release_notes": "Patches a Zigbee buffer overflow that could allow the bridge to be used as a persistent pivot point."},
             {"model": "TP-Link Kasa Smart Plug", "latest_version": "1.0.8 Build 231115", "severity": "MEDIUM", "release_notes": "Secures local network API endpoints against unauthorized toggle commands."},
-            {"model": "Wemo Smart Plug", "latest_version": "v2.00.11420", "severity": "CRITICAL", "release_notes": "Addresses a severe UPnP vulnerability allowing remote arbitrary command execution."},
+            {"model": "Tuya Smart Plug", "latest_version": "v2.00.11420", "severity": "CRITICAL", "release_notes": "Addresses a severe UPnP vulnerability allowing remote arbitrary command execution."},
             {"model": "Eero Pro 6", "latest_version": "v7.1.1-16", "severity": "HIGH", "release_notes": "Patches WPA3 downgrade vulnerability and improves mesh routing encryption."},
             {"model": "Google Nest WiFi", "latest_version": "14150.376.32", "severity": "MEDIUM", "release_notes": "Resolves guest network isolation bypass under specific routing conditions."}
         ]
